@@ -4,14 +4,14 @@ Browser morph / proportion concept viewer (no Flutter required).
 
 ## Live
 
-After enabling GitHub Pages (Settings → Pages → Deploy from branch → `main` / `/docs`):
-
 **https://albinzeka.github.io/tempwebviewconcept/**
 
-## Local
+If that 404s, enable Pages once: **Settings → Pages → Branch `main` → folder `/ (root)` → Save**.
 
-From the parent project folder, run `START.bat` or:
+## Files
 
-```bash
-node scripts/serve.mjs
-```
+| Path | Role |
+|---|---|
+| `index.html` | Viewer + morph UI |
+| `models/height_overlay_clean.glb` | Character (~42 MB) |
+| `vendor/` | Three.js |
