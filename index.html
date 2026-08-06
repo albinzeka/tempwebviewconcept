@@ -268,59 +268,10 @@
     };
 
     /**
-     * Additional bone CTRL trial — local TRS deltas on form overlay bones.
-     * Applied AFTER mixer / height parents. Values are −1..1 → ±amp.
+     * Optional form overlay CTRLs — local TRS deltas after mixer / height.
+     * Values −1..1 → ±amp. Empty until a trial bone is added.
      */
-    const FORM_CTRL_DEFS = {
-      lidBR003LocX: {
-        id: 'lidBR003LocX',
-        label: 'Lid BR.003 loc X',
-        bone: 'CTRL-DEF-lid.B.R.003',
-        mode: 'pos',
-        axis: 'x',
-        amp: 0.008,
-      },
-      lidBR003LocY: {
-        id: 'lidBR003LocY',
-        label: 'Lid BR.003 loc Y',
-        bone: 'CTRL-DEF-lid.B.R.003',
-        mode: 'pos',
-        axis: 'y',
-        amp: 0.008,
-      },
-      lidBR003LocZ: {
-        id: 'lidBR003LocZ',
-        label: 'Lid BR.003 loc Z',
-        bone: 'CTRL-DEF-lid.B.R.003',
-        mode: 'pos',
-        axis: 'z',
-        amp: 0.008,
-      },
-      lidBR003SclX: {
-        id: 'lidBR003SclX',
-        label: 'Lid BR.003 scl X',
-        bone: 'CTRL-DEF-lid.B.R.003',
-        mode: 'scl',
-        axis: 'x',
-        amp: 0.25,
-      },
-      lidBR003SclY: {
-        id: 'lidBR003SclY',
-        label: 'Lid BR.003 scl Y',
-        bone: 'CTRL-DEF-lid.B.R.003',
-        mode: 'scl',
-        axis: 'y',
-        amp: 0.25,
-      },
-      lidBR003SclZ: {
-        id: 'lidBR003SclZ',
-        label: 'Lid BR.003 scl Z',
-        bone: 'CTRL-DEF-lid.B.R.003',
-        mode: 'scl',
-        axis: 'z',
-        amp: 0.25,
-      },
-    };
+    const FORM_CTRL_DEFS = {};
     const formCtrlValues = Object.fromEntries(
       Object.keys(FORM_CTRL_DEFS).map((id) => [id, 0]),
     );
@@ -423,18 +374,6 @@
           { type: 'bone', id: 'armSize', label: 'Arm size', range: 'B' },
           { type: 'bone', id: 'legsThickness', label: 'Leg thickness', range: 'S' },
           { type: 'bone', id: 'hipBone', label: 'Hip bone size', range: 'S' },
-        ],
-      },
-      {
-        id: 'ctrlTrial',
-        label: 'CTRL trial (lid)',
-        controls: [
-          { type: 'form', id: 'lidBR003LocX', label: 'Lid BR.003 loc X', range: 'S' },
-          { type: 'form', id: 'lidBR003LocY', label: 'Lid BR.003 loc Y', range: 'S' },
-          { type: 'form', id: 'lidBR003LocZ', label: 'Lid BR.003 loc Z', range: 'S' },
-          { type: 'form', id: 'lidBR003SclX', label: 'Lid BR.003 scl X', range: 'S' },
-          { type: 'form', id: 'lidBR003SclY', label: 'Lid BR.003 scl Y', range: 'S' },
-          { type: 'form', id: 'lidBR003SclZ', label: 'Lid BR.003 scl Z', range: 'S' },
         ],
       },
       {
@@ -8741,6 +8680,13 @@
     let heightRootOverlay = null; // CTRL-root (structural parent; keep at rest)
     let heightRootRestPos = null; // {x,y,z} local
     let heightSceneRestY = 0; // glbRoot scene Y at load
+    // Rigify chest follow vs height single-pivot: if chest CTRL was parented under
+    // spine_fk.003 for Rigify, we re-attach it under CTRL-stature for height scale
+    // and CopyRotation from spine_fk.003 each frame.
+    let chestFollowSrc = null; // spine_fk.003
+    let chestFollowDst = null; // CTRL-tweak_spine.003
+    const _chestFollowWorldQ = new THREE.Quaternion();
+    const _chestFollowParentQ = new THREE.Quaternion();
     let heightGroundLiftPerMul = 0; // world-Y lift per (mul-1) above rest
     let heightGroundSinkPerMul = 0; // world-Y drop per (1-mul) below rest
     // v3.1.1+: CTRL-stature = height. Head: primarily CTRL-ORG-spine.005;
@@ -8776,6 +8722,33 @@
       return /ORG-spine\.?006$/i.test(ctrlSuffix(n)) || /ORG-spine\.?006$/i.test(n);
     };
     const isMutedHeadOrgCtrl = (name) => isHeadTipCtrl(name);
+    // Chest/shoulder height carrier. After spine_fk.003 Rigify fix this sits under
+    // spine_fk.003 (not CTRL-stature), so it must take stature scale locally.
+    const isChestHeightCtrl = (name) => {
+      const n = String(name || '');
+      if (!isCtrlBone(n)) return false;
+      return /tweak_spine\.?003$/i.test(ctrlSuffix(n)) || /tweak_spine\.?003$/i.test(n);
+    };
+    /** Leg length drivers — Y only; excludes foot tweaks. */
+    const isLegLengthCtrl = (name) => {
+      const n = String(name || '');
+      if (!isCtrlBone(n)) return false;
+      const s = ctrlSuffix(n);
+      if (/foot_tweak/i.test(s)) return false;
+      return /thigh_tweak|shin_tweak/i.test(s);
+    };
+    /** True if an ancestor already carries body stature scale (CTRL-stature or chest CTRL). */
+    const statureCarrierAncestor = (obj) => {
+      let p = obj?.parent;
+      let guard = 0;
+      while (p && guard++ < 64) {
+        if (isStatureCtrl(p.name)) return 'stature';
+        if (isChestHeightCtrl(p.name)) return 'chest';
+        p = p.parent;
+      }
+      return null;
+    };
+    const inheritsStatureScale = (obj) => statureCarrierAncestor(obj) === 'stature';
     let mixer = null;
     let animClips = [];
     let animActions = [];
@@ -8855,6 +8828,50 @@
         if (normalizeBoneKey(o.name) === key) found = o;
       });
       return found;
+    }
+
+    /**
+     * Single height pivot: if CTRL-tweak_spine.003 sits under spine_fk.003 for Rigify
+     * follow, re-attach it under CTRL-stature (preserve world TRS) and CopyRotation
+     * from spine_fk.003 each frame. Dual pivots (stature + chest) crush the mid-
+     * torso and make the neck look extruded at short height.
+     */
+    function bindChestCtrlToStatureForHeight(root) {
+      chestFollowSrc = null;
+      chestFollowDst = null;
+      if (!root) return false;
+      const stature = findObjectByName(root, 'CTRL-stature') || findObjectByName(root, 'HEIGHT-stature');
+      const chest = findObjectByName(root, 'CTRL-tweak_spine.003') || findObjectByName(root, 'HEIGHT-tweak_spine.003');
+      const fk = findObjectByName(root, 'spine_fk.003');
+      if (!stature || !chest || !fk) return false;
+      if (chest.parent === stature) return false;
+      let underFk = false;
+      let p = chest.parent;
+      let guard = 0;
+      while (p && guard++ < 64) {
+        if (p === fk || /spine_fk\.?003$/i.test(p.name || '')) {
+          underFk = true;
+          break;
+        }
+        p = p.parent;
+      }
+      if (!underFk) return false;
+      stature.attach(chest);
+      chestFollowSrc = fk;
+      chestFollowDst = chest;
+      console.log('[height] rebound', chest.name, 'under', stature.name, '+ CopyRotation from', fk.name);
+      return true;
+    }
+
+    function applyChestFollowRotation() {
+      if (!chestFollowSrc || !chestFollowDst) return;
+      chestFollowSrc.getWorldQuaternion(_chestFollowWorldQ);
+      if (chestFollowDst.parent) {
+        chestFollowDst.parent.getWorldQuaternion(_chestFollowParentQ);
+        chestFollowDst.quaternion.copy(_chestFollowParentQ.invert().multiply(_chestFollowWorldQ));
+      } else {
+        chestFollowDst.quaternion.copy(_chestFollowWorldQ);
+      }
     }
 
     function resolveHeightRoot(root) {
@@ -9381,8 +9398,24 @@
       return n > 0;
     }
 
+    /** Scalar stature (ground offset + legacy neck compensate). */
     function statureMul() {
       return 1 + 0.2 * bodyHeight;
+    }
+
+    /** Natural height: torso length (local Y). */
+    function statureSyTorso() {
+      return 1 + 0.12 * bodyHeight;
+    }
+
+    /** Natural height: weak width on stature (local X/Z). */
+    function statureSxz() {
+      return 1 + 0.04 * bodyHeight;
+    }
+
+    /** Natural height: leg length (thigh/shin tweak Y). */
+    function statureSyLeg() {
+      return 1 + 0.322 * bodyHeight;
     }
 
     function headSizeMul() {
@@ -9399,11 +9432,16 @@
       return { x: widthMul, y: mul, z: widthMul };
     }
 
-    /** Local .004 so world neck ≈ (1 + NECK_WEIGHT*(S-1)) * headNeck, under parent scale S. */
-    function neckLocalAxis(statureS, headAxis) {
-      const fromStature = (1 + NECK_WEIGHT * (statureS - 1)) / statureS;
+    /** World neck target ≈ (1 + NECK_WEIGHT*(S-1)) * headNeck share. */
+    function neckWorldAxis(statureS, headAxis) {
+      const fromStature = 1 + NECK_WEIGHT * (statureS - 1);
       const fromHead = 1 + NECK_WEIGHT * (headAxis / HEAD_BASE - 1);
       return fromStature * fromHead;
+    }
+
+    /** Local .004 when parent already has stature scale S (legacy under CTRL-stature). */
+    function neckLocalAxis(statureS, headAxis) {
+      return neckWorldAxis(statureS, headAxis) / statureS;
     }
 
     function propRangeMul(value, range) {
@@ -9447,40 +9485,80 @@
 
     function applyCtrlScales(entries) {
       const S = statureMul();
+      const syTorso = statureSyTorso();
+      const sxz = statureSxz();
+      const syLeg = statureSyLeg();
       const headAxes = headSizeScaleAxes();
       const hasStature = entries.some((e) => isStatureCtrl(e.name));
-      const neckLocal = {
-        x: neckLocalAxis(S, headAxes.x),
-        y: neckLocalAxis(S, headAxes.y),
-        z: neckLocalAxis(S, headAxes.z),
+      // Neck locals when parent is CTRL-stature (per-axis stature, not isotropic S).
+      const neckUnderStature = {
+        x: neckLocalAxis(sxz, headAxes.x),
+        y: neckLocalAxis(syTorso, headAxes.y),
+        z: neckLocalAxis(sxz, headAxes.z),
       };
-      // .005 local so world.005 = S * headAxes (compound through .004).
-      const headLocal = {
-        x: headAxes.x / neckLocal.x,
-        y: headAxes.y / neckLocal.y,
-        z: headAxes.z / neckLocal.z,
+      // Cancel inherited stature so world head ≈ headAxes (not squished/tall with height).
+      const headCancelStature = {
+        x: headAxes.x / sxz,
+        y: headAxes.y / syTorso,
+        z: headAxes.z / sxz,
+      };
+      const headLocalUnderStature = {
+        x: headAxes.x / (sxz * neckUnderStature.x),
+        y: headAxes.y / (syTorso * neckUnderStature.y),
+        z: headAxes.z / (sxz * neckUnderStature.z),
       };
       const propMuls = collectPropAxisMuls();
       for (const entry of entries) {
         const o = entry.object;
         if (!o) continue;
         const p = propMulForEntry(entry.name, propMuls);
+        const carrier = statureCarrierAncestor(o);
         let lx = 1;
         let ly = 1;
         let lz = 1;
         if (hasStature) {
           if (isStatureCtrl(entry.name)) {
-            lx = ly = lz = S;
+            lx = sxz;
+            ly = syTorso;
+            lz = sxz;
+          } else if (isLegLengthCtrl(entry.name)) {
+            ly = syLeg;
+          } else if (isChestHeightCtrl(entry.name) && !carrier) {
+            // Legacy: under spine_fk.003 — drive chest stature here.
+            lx = sxz;
+            ly = syTorso;
+            lz = sxz;
           } else if (isHeadNeckCtrl(entry.name)) {
-            lx = neckLocal.x;
-            ly = neckLocal.y;
-            lz = neckLocal.z;
+            if (carrier === 'stature') {
+              // Legacy: child of CTRL-stature → compensated local.
+              lx = neckUnderStature.x;
+              ly = neckUnderStature.y;
+              lz = neckUnderStature.z;
+            } else if (carrier === 'chest') {
+              // Child of CTRL-tweak_spine.003 (inherits stature): no extra scale.
+              lx = ly = lz = 1;
+            } else {
+              lx = sxz;
+              ly = syTorso;
+              lz = sxz;
+            }
           } else if (isHeadSizeCtrl(entry.name)) {
-            lx = headLocal.x;
-            ly = headLocal.y;
-            lz = headLocal.z;
+            if (carrier === 'stature') {
+              lx = headLocalUnderStature.x;
+              ly = headLocalUnderStature.y;
+              lz = headLocalUnderStature.z;
+            } else if (carrier === 'chest') {
+              // Inherit stature via chest — undo XZ/Y so head size stays constant with H.
+              lx = headCancelStature.x;
+              ly = headCancelStature.y;
+              lz = headCancelStature.z;
+            } else {
+              lx = headAxes.x;
+              ly = headAxes.y;
+              lz = headAxes.z;
+            }
           } else {
-            // .006 + proportion CTRLs: bind local, then props; inherit stature via parent.
+            // .006 + proportion CTRLs: bind local, then props; inherit via parent.
             lx = ly = lz = 1;
           }
         } else if (isMutedHeadOrgCtrl(entry.name)) {
@@ -9671,6 +9749,7 @@
     function applyHeightParents() {
       if (!heightApplyEnabled || heightMode !== 'parents' || !heightParentBones.length) return false;
       applyCtrlScales(heightParentBones);
+      applyChestFollowRotation();
       // Ground offset follows full body stature mul (weight-1 reference).
       applySceneGroundOffset(1 + 0.2 * bodyHeight);
       glbRoot?.updateMatrixWorld(true);
@@ -10490,6 +10569,8 @@
       bodyHeadSize = 0;
       for (const k of Object.keys(propValues)) propValues[k] = 0;
       for (const k of Object.keys(formCtrlValues)) formCtrlValues[k] = 0;
+      // Single height pivot before rest capture (see bindChestCtrlToStatureForHeight).
+      bindChestCtrlToStatureForHeight(glbRoot);
       // Capture bind/rest BEFORE mixer applies any clip (Height frame0 would pollute rest).
       heightRestScales.clear();
       heightRestTRS.clear();
@@ -11064,8 +11145,8 @@
         refreshValueLabel();
         return;
       }
-      const prefer = uiControls.find((c) => String(c.id || '').startsWith('lidBR003'))
-        || uiControls.find((c) => c.id === 'face_gender_expression' || c.id === 'body_gender_expression')
+      const prefer = uiControls.find((c) => c.id === 'face_gender_expression' || c.id === 'body_gender_expression')
+        || uiControls.find((c) => c.id === 'height')
         || uiControls[0];
       uiSelectedKey = controlKey(prefer);
       ctrlSelect.value = uiSelectedKey;
@@ -11098,7 +11179,7 @@
         catSelect.appendChild(opt);
       }
       if (cats.length) {
-        const preferCat = cats.find((c) => c.id === 'ctrlTrial') || cats[0];
+        const preferCat = cats.find((c) => c.id === 'bodyBones') || cats[0];
         catSelect.value = preferCat.id;
         fillControls(preferCat.id);
       }
