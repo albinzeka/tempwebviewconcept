@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-  <title>Concept Morph Viewer</title>
+  <title>Additional bone CTRL project</title>
   <script type="importmap">
   {
     "imports": {
@@ -84,7 +84,7 @@
   <div id="callouts"></div>
   <div id="status"></div>
   <div id="morphPanel">
-    <h1>Concept Morph Viewer</h1>
+    <h1>Additional bone CTRL</h1>
     <div class="row">
       <label for="catSelect">Category</label>
       <select id="catSelect"></select>
@@ -266,6 +266,69 @@
         targets: [{ bone: 'CTRL-tweak_spine', axes: 'x' }],
       },
     };
+
+    /**
+     * Additional bone CTRL trial — local TRS deltas on form overlay bones.
+     * Applied AFTER mixer / height parents. Values are −1..1 → ±amp.
+     */
+    const FORM_CTRL_DEFS = {
+      lidBR003LocX: {
+        id: 'lidBR003LocX',
+        label: 'Lid BR.003 loc X',
+        bone: 'CTRL-DEF-lid.B.R.003',
+        mode: 'pos',
+        axis: 'x',
+        amp: 0.008,
+      },
+      lidBR003LocY: {
+        id: 'lidBR003LocY',
+        label: 'Lid BR.003 loc Y',
+        bone: 'CTRL-DEF-lid.B.R.003',
+        mode: 'pos',
+        axis: 'y',
+        amp: 0.008,
+      },
+      lidBR003LocZ: {
+        id: 'lidBR003LocZ',
+        label: 'Lid BR.003 loc Z',
+        bone: 'CTRL-DEF-lid.B.R.003',
+        mode: 'pos',
+        axis: 'z',
+        amp: 0.008,
+      },
+      lidBR003SclX: {
+        id: 'lidBR003SclX',
+        label: 'Lid BR.003 scl X',
+        bone: 'CTRL-DEF-lid.B.R.003',
+        mode: 'scl',
+        axis: 'x',
+        amp: 0.25,
+      },
+      lidBR003SclY: {
+        id: 'lidBR003SclY',
+        label: 'Lid BR.003 scl Y',
+        bone: 'CTRL-DEF-lid.B.R.003',
+        mode: 'scl',
+        axis: 'y',
+        amp: 0.25,
+      },
+      lidBR003SclZ: {
+        id: 'lidBR003SclZ',
+        label: 'Lid BR.003 scl Z',
+        bone: 'CTRL-DEF-lid.B.R.003',
+        mode: 'scl',
+        axis: 'z',
+        amp: 0.25,
+      },
+    };
+    const formCtrlValues = Object.fromEntries(
+      Object.keys(FORM_CTRL_DEFS).map((id) => [id, 0]),
+    );
+    /** boneKey -> { pos:{x,y,z}, scl:{x,y,z} } captured at bind */
+    const formCtrlRest = new Map();
+    /** boneKey -> resolved Object3D */
+    const formCtrlObjects = new Map();
+
     // Shape-key (morph target) catalog: group headers + synced influences by name across meshes.
     let shapeKeyGroups = []; // [{ id, label, keys: string[] }] — mesh header groups (legacy/debug)
     let shapeKeyValues = {}; // name -> -1..1
@@ -360,6 +423,18 @@
           { type: 'bone', id: 'armSize', label: 'Arm size', range: 'B' },
           { type: 'bone', id: 'legsThickness', label: 'Leg thickness', range: 'S' },
           { type: 'bone', id: 'hipBone', label: 'Hip bone size', range: 'S' },
+        ],
+      },
+      {
+        id: 'ctrlTrial',
+        label: 'CTRL trial (lid)',
+        controls: [
+          { type: 'form', id: 'lidBR003LocX', label: 'Lid BR.003 loc X', range: 'S' },
+          { type: 'form', id: 'lidBR003LocY', label: 'Lid BR.003 loc Y', range: 'S' },
+          { type: 'form', id: 'lidBR003LocZ', label: 'Lid BR.003 loc Z', range: 'S' },
+          { type: 'form', id: 'lidBR003SclX', label: 'Lid BR.003 scl X', range: 'S' },
+          { type: 'form', id: 'lidBR003SclY', label: 'Lid BR.003 scl Y', range: 'S' },
+          { type: 'form', id: 'lidBR003SclZ', label: 'Lid BR.003 scl Z', range: 'S' },
         ],
       },
       {
@@ -9457,6 +9532,68 @@
       return out;
     }
 
+    function captureFormCtrlRests(root) {
+      formCtrlRest.clear();
+      formCtrlObjects.clear();
+      if (!root) return 0;
+      const bones = new Set(Object.values(FORM_CTRL_DEFS).map((d) => d.bone));
+      let n = 0;
+      for (const boneName of bones) {
+        const o = findObjectByName(root, boneName);
+        if (!o) continue;
+        const key = normalizeBoneKey(boneName);
+        formCtrlObjects.set(key, o);
+        formCtrlRest.set(key, {
+          pos: { x: o.position.x, y: o.position.y, z: o.position.z },
+          scl: { x: o.scale.x, y: o.scale.y, z: o.scale.z },
+        });
+        n += 1;
+      }
+      return n;
+    }
+
+    function applyFormCtrls() {
+      if (!glbRoot || !formCtrlRest.size) return false;
+      // Gather per-bone desired deltas from all form sliders.
+      const byBone = new Map(); // key -> { pos:{x,y,z}, scl:{x,y,z} } multipliers/offsets
+      for (const def of Object.values(FORM_CTRL_DEFS)) {
+        const key = normalizeBoneKey(def.bone);
+        if (!byBone.has(key)) {
+          byBone.set(key, {
+            dPos: { x: 0, y: 0, z: 0 },
+            dScl: { x: 1, y: 1, z: 1 },
+          });
+        }
+        const slot = byBone.get(key);
+        const v = Math.max(-1, Math.min(1, +formCtrlValues[def.id] || 0));
+        const axis = String(def.axis || 'x').toLowerCase();
+        const amp = +def.amp || 0;
+        if (def.mode === 'pos') {
+          slot.dPos[axis] += v * amp;
+        } else if (def.mode === 'scl') {
+          slot.dScl[axis] *= (1 + v * amp);
+        }
+      }
+      for (const [key, delta] of byBone) {
+        const o = formCtrlObjects.get(key);
+        const rest = formCtrlRest.get(key);
+        if (!o || !rest) continue;
+        o.position.set(
+          rest.pos.x + delta.dPos.x,
+          rest.pos.y + delta.dPos.y,
+          rest.pos.z + delta.dPos.z,
+        );
+        // Scale: compose with whatever applyCtrlScales already wrote this frame.
+        // Prefer rest * form so we don't fight height parents on this bone.
+        o.scale.set(
+          rest.scl.x * delta.dScl.x,
+          rest.scl.y * delta.dScl.y,
+          rest.scl.z * delta.dScl.z,
+        );
+      }
+      return true;
+    }
+
     function computeFootGroundY() {
       if (!glbRoot) return 0;
       glbRoot.updateMatrixWorld(true);
@@ -10287,6 +10424,25 @@
             max: 1,
             anim: null,
           });
+        } else if (c.type === 'form') {
+          const def = FORM_CTRL_DEFS[c.id];
+          out.push({
+            type: 'form',
+            id: c.id,
+            label: c.label,
+            range: rangeAbbrev(c.range) || 'S',
+            boneMorph: true,
+            value: formCtrlValues[c.id] ?? 0,
+            min: -1,
+            max: 1,
+            anim: null,
+            formBone: def?.bone || null,
+            formMode: def?.mode || null,
+            formAxis: def?.axis || null,
+            formAmp: def?.amp ?? 0,
+            positiveLabel: `${def?.mode || '?'}.${def?.axis || '?'} ±${def?.amp ?? 0}`,
+            negativeLabel: def?.bone || 'CTRL',
+          });
         } else if (c.type === 'axis') {
           const def = SHAPE_AXIS_DEFS.find((d) => d.id === c.id);
           const unipolar = !c.negative || c.negative.length === 0;
@@ -10333,6 +10489,7 @@
       bodyHeight = 0;
       bodyHeadSize = 0;
       for (const k of Object.keys(propValues)) propValues[k] = 0;
+      for (const k of Object.keys(formCtrlValues)) formCtrlValues[k] = 0;
       // Capture bind/rest BEFORE mixer applies any clip (Height frame0 would pollute rest).
       heightRestScales.clear();
       heightRestTRS.clear();
@@ -10341,6 +10498,7 @@
       setupAnimations(gltf);
       // If CTRL-* overlay bones exist, drive them all from the H slider (anim-safe parents mode).
       heightParentBones = collectHeightParentBones(glbRoot);
+      const formN = captureFormCtrlRests(glbRoot);
       if (heightParentBones.length) {
         heightMode = 'parents';
         heightRoot = heightParentBones[0].object;
@@ -10358,7 +10516,7 @@
       rebuildRulers(Math.max(2.0, (lastMetrics?.maxY || 1.5) + 0.3), 0.1);
       frameCharacter(glbRoot);
       const animInfo = animList().map((a) => a.name).join(',') || 'none';
-      statusEl.textContent = `Loaded · bones=${listBoneNames(glbRoot).length} · root=${heightRoot?.name || '—'} · anim=${animInfo} · mode=${heightMode}${heightParentBones.length ? ` · CTRL×${heightParentBones.length}` : ''}${heightRootOverlay ? ' · ground' : ''} · shapekeys=${skInfo.keys}/${skInfo.groups.length}g`;
+      statusEl.textContent = `Loaded · bones=${listBoneNames(glbRoot).length} · root=${heightRoot?.name || '—'} · anim=${animInfo} · mode=${heightMode}${heightParentBones.length ? ` · CTRL×${heightParentBones.length}` : ''}${formN ? ` · formCTRL×${formN}` : ''}${heightRootOverlay ? ' · ground' : ''} · shapekeys=${skInfo.keys}/${skInfo.groups.length}g`;
       refreshHud();
       window._sandboxReady = true;
       return true;
@@ -10392,6 +10550,24 @@
       applyHeight();
       return true;
     };
+    window.sandboxSetFormCtrl = (id, value) => {
+      if (!Object.prototype.hasOwnProperty.call(formCtrlValues, id)) return false;
+      formCtrlValues[id] = Math.max(-1, Math.min(1, +value));
+      applyFormCtrls();
+      refreshHud();
+      return true;
+    };
+    window.sandboxGetFormCtrls = () => ({ ...formCtrlValues });
+    window.sandboxListFormCtrls = () => Object.values(FORM_CTRL_DEFS).map((d) => ({
+      id: d.id,
+      label: d.label,
+      bone: d.bone,
+      mode: d.mode,
+      axis: d.axis,
+      amp: d.amp,
+      value: formCtrlValues[d.id] ?? 0,
+      found: formCtrlObjects.has(normalizeBoneKey(d.bone)),
+    }));
     window.sandboxGetProps = () => ({
       height: bodyHeight,
       headSize: bodyHeadSize,
@@ -10779,6 +10955,7 @@
         else if (heightApplyEnabled && heightMode === 'compose' && glbRoot) applyHeightCompose();
         else if (heightApplyEnabled && heightMode === 'parents' && glbRoot) applyHeightParents();
         else if (heightApplyEnabled && heightMode === 'root' && glbRoot) applyHeight();
+        applyFormCtrls();
         lastMetrics = computeMeshMetrics(glbRoot);
         if (showBbox) updateBboxHelper();
       } else if (heightApplyEnabled && heightMode === 'recipe' && glbRoot) {
@@ -10788,6 +10965,7 @@
       } else if (heightApplyEnabled && heightMode === 'parents' && glbRoot) {
         applyHeightParents();
       }
+      applyFormCtrls();
       // mul/compose when not playing: only via applyHeight() / animSeek (need fresh mixer sample)
       if (controls.enabled) controls.update();
       renderer.render(scene, camera);
@@ -10828,6 +11006,9 @@
 
     function valueHint(c) {
       if (!c) return '';
+      if (c.type === 'form') {
+        return `−1…1 · ${c.negativeLabel || 'CTRL'} · ${c.positiveLabel || ''}`;
+      }
       if (c.type === 'bone') {
         const span = c.range === 'B' ? '×0.8…1.2' : '×0.9…1.1';
         return `−1…1 · ${span}`;
@@ -10859,6 +11040,8 @@
         if (c.id === 'height') window.sandboxSetHeight(t);
         else if (c.id === 'headSize') window.sandboxSetHeadSize(t);
         else window.sandboxSetProp(c.id, t);
+      } else if (c.type === 'form') {
+        window.sandboxSetFormCtrl(c.id, t);
       } else if (c.type === 'axis') {
         window.sandboxSetShapeAxis(c.id, t);
       }
@@ -10881,7 +11064,8 @@
         refreshValueLabel();
         return;
       }
-      const prefer = uiControls.find((c) => c.id === 'face_gender_expression' || c.id === 'body_gender_expression')
+      const prefer = uiControls.find((c) => String(c.id || '').startsWith('lidBR003'))
+        || uiControls.find((c) => c.id === 'face_gender_expression' || c.id === 'body_gender_expression')
         || uiControls[0];
       uiSelectedKey = controlKey(prefer);
       ctrlSelect.value = uiSelectedKey;
@@ -10913,7 +11097,11 @@
         opt.textContent = `${cat.label} (${cat.count})`;
         catSelect.appendChild(opt);
       }
-      if (cats.length) fillControls(cats[0].id);
+      if (cats.length) {
+        const preferCat = cats.find((c) => c.id === 'ctrlTrial') || cats[0];
+        catSelect.value = preferCat.id;
+        fillControls(preferCat.id);
+      }
     }
 
     function wireMorphUi() {
