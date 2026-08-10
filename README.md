@@ -1,4 +1,4 @@
-# Concept Morph Viewer
+﻿# Concept Morph Viewer
 
 Browser morph / proportion concept viewer (no Flutter required).
 
@@ -13,5 +13,6 @@ If that 404s, enable Pages once: **Settings → Pages → Branch `main` → fold
 | Path | Role |
 |---|---|
 | `index.html` | Viewer + morph UI |
-| `models/height_overlay_clean.glb` | Character (~42 MB) |
+| `models/height_overlay_clean.glb` | Character |
+| `textures/` | Body, head, brows, iris, pupil, shine |
 | `vendor/` | Three.js |

@@ -76,11 +76,80 @@
     #morphPanel input[type="range"] { width: 100%; }
     #morphPanel .val { color: #cfd2da; font-variant-numeric: tabular-nums; margin-top: 2px; }
     #morphPanel .hint { color: #888; font-size: 11px; margin-top: 2px; }
+    #whatsNew {
+      position: absolute; right: 10px; top: 10px; z-index: 8;
+      display: flex; flex-direction: column; align-items: flex-end;
+      max-width: min(340px, calc(100vw - 20px));
+      pointer-events: none;
+    }
+    #whatsNewBtn {
+      pointer-events: auto;
+      cursor: pointer;
+      border: 1px solid #3a3d48;
+      background: rgba(18, 20, 26, 0.94);
+      color: #e8e8ee;
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.35);
+    }
+    #whatsNewBtn:hover { border-color: #5a7df0; color: #fff; }
+    #whatsNewBtn[aria-expanded="true"] {
+      background: #3d6df0; border-color: #3d6df0; color: #fff;
+    }
+    #whatsNewPanel {
+      pointer-events: auto;
+      display: none;
+      margin-top: 8px;
+      width: min(340px, calc(100vw - 20px));
+      max-height: min(60vh, 480px);
+      overflow: auto;
+      background: rgba(18, 20, 26, 0.96);
+      color: #e8e8ee;
+      border: 1px solid #3a3d48;
+      border-radius: 10px;
+      padding: 12px 14px;
+      font-size: 12px;
+      line-height: 1.45;
+      box-shadow: 0 10px 32px rgba(0,0,0,0.5);
+    }
+    #whatsNewPanel.open { display: block; }
+    #whatsNewPanel h2 {
+      margin: 0 0 10px; font-size: 13px; font-weight: 650;
+      letter-spacing: 0.03em;
+    }
+    #whatsNewPanel .wn-date {
+      color: #8ab4ff; font-size: 10px; text-transform: uppercase;
+      letter-spacing: 0.06em; margin: 12px 0 4px;
+    }
+    #whatsNewPanel .wn-date:first-of-type { margin-top: 0; }
+    #whatsNewPanel ul { margin: 0; padding-left: 1.15em; }
+    #whatsNewPanel li { margin: 0 0 6px; color: #cfd2da; }
+    #whatsNewPanel li strong { color: #fff; font-weight: 600; }
   </style>
 </head>
 <body>
   <div id="hud">Loading…</div>
   <div id="legend"></div>
+  <div id="whatsNew">
+    <button type="button" id="whatsNewBtn" aria-expanded="false" aria-controls="whatsNewPanel">What's new?</button>
+    <div id="whatsNewPanel" role="region" aria-label="Recent changes">
+      <h2>Recent changes</h2>
+      <div class="wn-date">Aug 2026</div>
+      <ul>
+        <li><strong>Textures</strong> — body, head, eyebrows, iris &amp; pupil maps applied at runtime</li>
+        <li><strong>Eyebrows</strong> — white background keyed out so brows composite cleanly on the face</li>
+        <li><strong>Iris hue</strong> — Materials category slider to tint eye color</li>
+        <li><strong>Lid bones</strong> — eye master scale, lid root scale/rotate, lid B/T local Z controls</li>
+        <li><strong>Natural height</strong> — stature + leg tweak recipe (no amp UI); head stays stable while height changes</li>
+        <li><strong>Spine reparent</strong> — CTRL-tweak_spine.003 under CTRL-stature (fixes extruded neck on height)</li>
+        <li><strong>Body bones</strong> — lats width, waist width/thickness, hip size, neck length</li>
+        <li><strong>Model refresh</strong> — material-stripped GLB with Body / Head / Eyes / Shine slots</li>
+      </ul>
+    </div>
+  </div>
   <div id="callouts"></div>
   <div id="status"></div>
   <div id="morphPanel">
@@ -118,6 +187,17 @@
     const canvas = document.getElementById('c');
     const hudEl = document.getElementById('hud');
     const statusEl = document.getElementById('status');
+
+    (function wireWhatsNew() {
+      const btn = document.getElementById('whatsNewBtn');
+      const panel = document.getElementById('whatsNewPanel');
+      if (!btn || !panel) return;
+      btn.addEventListener('click', () => {
+        const open = !panel.classList.contains('open');
+        panel.classList.toggle('open', open);
+        btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      });
+    })();
 
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -211,8 +291,10 @@
       armSize: 0,
       legsThickness: 0,
       hipBone: 0,
+      waistWidth: 0,
+      neckLength: 0,
     };
-    // small → ×0.9..1.1  |  big → ×0.8..1.2
+    // small → ×0.9..1.1  |  big → ×0.8..1.2  |  optional amp overrides (e.g. 0.3 → ×0.7..1.3)
     const PROP_DEFS = {
       shoulderWidth: {
         id: 'shoulderWidth',
@@ -231,14 +313,21 @@
       },
       bellyThickness: {
         id: 'bellyThickness',
-        label: 'Belly thickness',
+        label: 'Waist thickness',
         range: 'small',
         targets: [{ bone: 'CTRL-tweak_spine.001', axes: 'z' }],
       },
+      waistWidth: {
+        id: 'waistWidth',
+        label: 'Waist width',
+        range: 'custom',
+        amp: 0.3, // ×0.7…1.3
+        targets: [{ bone: 'CTRL-tweak_spine.001', axes: 'x' }],
+      },
       upperTorsoWidth: {
         id: 'upperTorsoWidth',
-        label: 'Upper torso width',
-        range: 'small',
+        label: 'Lats width',
+        range: 'big', // ×0.8…1.2
         targets: [{ bone: 'CTRL-DEF-spine.003', axes: 'x' }],
       },
       armSize: {
@@ -262,23 +351,161 @@
       hipBone: {
         id: 'hipBone',
         label: 'Hip bone',
-        range: 'small',
+        range: 'big', // ×0.8…1.2
         targets: [{ bone: 'CTRL-tweak_spine', axes: 'x' }],
       },
     };
 
     /**
-     * Optional form overlay CTRLs — local TRS deltas after mixer / height.
-     * Values −1..1 → ±amp. Empty until a trial bone is added.
+     * Form overlay CTRLs — local TRS after mixer / height.
+     * Slider −1…1 → delta = v * amp (* target.sign for mirror).
+     * scl: scale = rest * (1 + v*amp*sign)  [use amp 0.1 → ×0.9…1.1]
+     * pos: position = rest + v*amp*sign     [glTF meters; 0.001 = 1 mm]
+     * rot: local Euler radians on axis from rest quat
      */
-    const FORM_CTRL_DEFS = {};
+    const FORM_CTRL_DEFS = {
+      eyeMasterSclX: {
+        id: 'eyeMasterSclX',
+        label: 'Eye size horizontal',
+        mode: 'scl',
+        axis: 'x',
+        amp: 0.1, // ×0.9…1.1
+        targets: [
+          { bone: 'CTRL-eye_master.L', sign: 1 },
+          { bone: 'CTRL-eye_master.R', sign: 1 },
+        ],
+      },
+      eyeMasterSclZ: {
+        id: 'eyeMasterSclZ',
+        label: 'Eye size vertical',
+        mode: 'scl',
+        axis: 'z',
+        amp: 0.2, // ×0.8…1.2
+        targets: [
+          { bone: 'CTRL-eye_master.L', sign: 1 },
+          { bone: 'CTRL-eye_master.R', sign: 1 },
+        ],
+      },
+      lidRootSclZ: {
+        id: 'lidRootSclZ',
+        label: 'Lid root scale Z',
+        mode: 'scl',
+        axis: 'z',
+        amp: 0.1,
+        targets: [
+          { bone: 'CTRL-DEF-lid.L', sign: 1 },
+          { bone: 'CTRL-DEF-lid.R', sign: 1 },
+        ],
+      },
+      lidRootRotY: {
+        id: 'lidRootRotY',
+        label: 'Lid root rotate Y',
+        mode: 'rot',
+        axis: 'y',
+        amp: 0.1,
+        targets: [
+          { bone: 'CTRL-DEF-lid.L', sign: -1 },
+          { bone: 'CTRL-DEF-lid.R', sign: 1 },
+        ],
+      },
+      lidBLocZ: {
+        id: 'lidBLocZ',
+        label: 'Lid B loc Z',
+        mode: 'pos',
+        axis: 'z',
+        amp: 0.001,
+        targets: [
+          { bone: 'CTRL-DEF-lid.B.L', sign: 1 },
+          { bone: 'CTRL-DEF-lid.B.R', sign: 1 },
+        ],
+      },
+      lidB001LocZ: {
+        id: 'lidB001LocZ',
+        label: 'Lid B.001 loc Z',
+        mode: 'pos',
+        axis: 'z',
+        amp: 0.001,
+        targets: [
+          { bone: 'CTRL-DEF-lid.B.L.001', sign: 1 },
+          { bone: 'CTRL-DEF-lid.B.R.001', sign: 1 },
+        ],
+      },
+      lidB002LocZ: {
+        id: 'lidB002LocZ',
+        label: 'Lid B.002 loc Z',
+        mode: 'pos',
+        axis: 'z',
+        amp: 0.001,
+        targets: [
+          { bone: 'CTRL-DEF-lid.B.L.002', sign: 1 },
+          { bone: 'CTRL-DEF-lid.B.R.002', sign: 1 },
+        ],
+      },
+      lidB003LocZ: {
+        id: 'lidB003LocZ',
+        label: 'Lid B.003 loc Z',
+        mode: 'pos',
+        axis: 'z',
+        amp: 0.001,
+        targets: [
+          { bone: 'CTRL-DEF-lid.B.L.003', sign: 1 },
+          { bone: 'CTRL-DEF-lid.B.R.003', sign: 1 },
+        ],
+      },
+      lidTLocZ: {
+        id: 'lidTLocZ',
+        label: 'Lid T loc Z',
+        mode: 'pos',
+        axis: 'z',
+        amp: 0.001,
+        targets: [
+          { bone: 'CTRL-DEF-lid.T.L', sign: 1 },
+          { bone: 'CTRL-DEF-lid.T.R', sign: 1 },
+        ],
+      },
+      lidT001LocZ: {
+        id: 'lidT001LocZ',
+        label: 'Lid T.001 loc Z',
+        mode: 'pos',
+        axis: 'z',
+        amp: 0.001,
+        targets: [
+          { bone: 'CTRL-DEF-lid.T.L.001', sign: 1 },
+          { bone: 'CTRL-DEF-lid.T.R.001', sign: 1 },
+        ],
+      },
+      lidT002LocZ: {
+        id: 'lidT002LocZ',
+        label: 'Lid T.002 loc Z',
+        mode: 'pos',
+        axis: 'z',
+        amp: 0.001,
+        targets: [
+          { bone: 'CTRL-DEF-lid.T.L.002', sign: 1 },
+          { bone: 'CTRL-DEF-lid.T.R.002', sign: 1 },
+        ],
+      },
+      lidT003LocZ: {
+        id: 'lidT003LocZ',
+        label: 'Lid T.003 loc Z',
+        mode: 'pos',
+        axis: 'z',
+        amp: 0.001,
+        targets: [
+          { bone: 'CTRL-DEF-lid.T.L.003', sign: 1 },
+          { bone: 'CTRL-DEF-lid.T.R.003', sign: 1 },
+        ],
+      },
+    };
     const formCtrlValues = Object.fromEntries(
       Object.keys(FORM_CTRL_DEFS).map((id) => [id, 0]),
     );
-    /** boneKey -> { pos:{x,y,z}, scl:{x,y,z} } captured at bind */
+    /** boneKey -> { pos, scl, quat } captured at bind */
     const formCtrlRest = new Map();
     /** boneKey -> resolved Object3D */
     const formCtrlObjects = new Map();
+    const _formEuler = new THREE.Euler();
+    const _formQuat = new THREE.Quaternion();
 
     // Shape-key (morph target) catalog: group headers + synced influences by name across meshes.
     let shapeKeyGroups = []; // [{ id, label, keys: string[] }] — mesh header groups (legacy/debug)
@@ -369,11 +596,38 @@
           { type: 'bone', id: 'height', label: 'Height', range: 'B' },
           { type: 'bone', id: 'shoulderWidth', label: 'Shoulder width', range: 'S' },
           { type: 'bone', id: 'upperTorsoThickness', label: 'Upper torso thickness', range: 'S' },
-          { type: 'bone', id: 'upperTorsoWidth', label: 'Upper torso width', range: 'S' },
-          { type: 'bone', id: 'bellyThickness', label: 'Belly thickness', range: 'S' },
+          { type: 'bone', id: 'upperTorsoWidth', label: 'Lats width', range: 'B' },
+          { type: 'bone', id: 'waistWidth', label: 'Waist width', range: 'B' },
+          { type: 'bone', id: 'bellyThickness', label: 'Waist thickness', range: 'S' },
           { type: 'bone', id: 'armSize', label: 'Arm size', range: 'B' },
           { type: 'bone', id: 'legsThickness', label: 'Leg thickness', range: 'S' },
-          { type: 'bone', id: 'hipBone', label: 'Hip bone size', range: 'S' },
+          { type: 'bone', id: 'hipBone', label: 'Hip bone size', range: 'B' },
+          { type: 'bone', id: 'neckLength', label: 'Neck length', range: 'B' },
+        ],
+      },
+      {
+        id: 'materials',
+        label: 'Materials',
+        controls: [
+          { type: 'iris', id: 'irisHue', label: 'Iris hue', range: 'B' },
+        ],
+      },
+      {
+        id: 'lidBones',
+        label: 'Lid bones',
+        controls: [
+          { type: 'form', id: 'eyeMasterSclX', label: 'Eye size horizontal', range: 'S' },
+          { type: 'form', id: 'eyeMasterSclZ', label: 'Eye size vertical', range: 'B' },
+          { type: 'form', id: 'lidRootSclZ', label: 'Lid root scale Z', range: 'S' },
+          { type: 'form', id: 'lidRootRotY', label: 'Lid root rotate Y', range: 'S' },
+          { type: 'form', id: 'lidBLocZ', label: 'Lid B loc Z', range: 'S' },
+          { type: 'form', id: 'lidB001LocZ', label: 'Lid B.001 loc Z', range: 'S' },
+          { type: 'form', id: 'lidB002LocZ', label: 'Lid B.002 loc Z', range: 'S' },
+          { type: 'form', id: 'lidB003LocZ', label: 'Lid B.003 loc Z', range: 'S' },
+          { type: 'form', id: 'lidTLocZ', label: 'Lid T loc Z', range: 'S' },
+          { type: 'form', id: 'lidT001LocZ', label: 'Lid T.001 loc Z', range: 'S' },
+          { type: 'form', id: 'lidT002LocZ', label: 'Lid T.002 loc Z', range: 'S' },
+          { type: 'form', id: 'lidT003LocZ', label: 'Lid T.003 loc Z', range: 'S' },
         ],
       },
       {
@@ -8695,6 +8949,9 @@
     const CTRL_PREFIXES = ['CTRL-', 'HEIGHT-'];
     const HEAD_BASE = 1.2; // visual base at head slider 0
     const NECK_WEIGHT = 0.2; // .004 share of stature/head scale deltas
+    const NECK_LENGTH_AMP = 0.2; // neckLength −1…1 → ×0.8…1.2 + head lift
+    /** Rest snapshot for neck-length recipe (head local pos + axis length). */
+    let neckLengthRest = null; // { headName, headPos:{x,y,z}, axisLen }
     const isCtrlBone = (name) => CTRL_PREFIXES.some((p) => String(name || '').startsWith(p));
     const isCtrlRootBone = (name) => {
       const n = String(name || '');
@@ -9444,10 +9701,54 @@
       return neckWorldAxis(statureS, headAxis) / statureS;
     }
 
-    function propRangeMul(value, range) {
+    function neckLengthMul() {
+      return 1 + NECK_LENGTH_AMP * Math.max(-1, Math.min(1, +propValues.neckLength || 0));
+    }
+
+    /**
+     * Capture head CTRL local rest + neck→head world length so we can lift the
+     * head when lengthening (scale alone often does not read as a longer neck).
+     */
+    function captureNeckLengthRest(root) {
+      neckLengthRest = null;
+      if (!root) return false;
+      const neck = findObjectByName(root, 'CTRL-ORG-spine.004') || findObjectByName(root, 'HEIGHT-ORG-spine.004');
+      const head = findObjectByName(root, 'CTRL-ORG-spine.005') || findObjectByName(root, 'HEIGHT-ORG-spine.005');
+      if (!neck || !head) return false;
+      root.updateMatrixWorld(true);
+      const nw = new THREE.Vector3();
+      const hw = new THREE.Vector3();
+      neck.getWorldPosition(nw);
+      head.getWorldPosition(hw);
+      neckLengthRest = {
+        headName: head.name,
+        headPos: { x: head.position.x, y: head.position.y, z: head.position.z },
+        axisLen: Math.max(0.02, nw.distanceTo(hw)),
+      };
+      return true;
+    }
+
+    /** Push head along local +Y by (N−1)×neck length after height/prop scales. */
+    function applyNeckLengthHeadOffset() {
+      if (!glbRoot || !neckLengthRest) return false;
+      const head = findObjectByName(glbRoot, neckLengthRest.headName);
+      if (!head) return false;
+      const N = neckLengthMul();
+      const rp = neckLengthRest.headPos;
+      head.position.set(
+        rp.x,
+        rp.y + (N - 1) * neckLengthRest.axisLen,
+        rp.z,
+      );
+      return true;
+    }
+
+    function propRangeMul(value, range, ampOverride) {
       const v = Math.max(-1, Math.min(1, +value || 0));
-      // small: 0.9..1.1  |  big: 0.8..1.2
-      const amp = range === 'big' ? 0.2 : 0.1;
+      // small: 0.9..1.1  |  big: 0.8..1.2  |  ampOverride wins (e.g. 0.3 → 0.7..1.3)
+      const amp = ampOverride != null && Number.isFinite(+ampOverride)
+        ? +ampOverride
+        : (range === 'big' ? 0.2 : 0.1);
       return 1 + amp * v;
     }
 
@@ -9459,7 +9760,7 @@
         return out.get(key);
       };
       for (const def of Object.values(PROP_DEFS)) {
-        const mul = propRangeMul(propValues[def.id], def.range);
+        const mul = propRangeMul(propValues[def.id], def.range, def.amp);
         if (Math.abs(mul - 1) < 1e-9) continue;
         for (const t of def.targets) {
           const key = normalizeBoneKey(t.bone);
@@ -9508,6 +9809,7 @@
         z: headAxes.z / (sxz * neckUnderStature.z),
       };
       const propMuls = collectPropAxisMuls();
+      const neckLenN = neckLengthMul();
       for (const entry of entries) {
         const o = entry.object;
         if (!o) continue;
@@ -9542,6 +9844,8 @@
               ly = syTorso;
               lz = sxz;
             }
+            // Stretch neck segment with Neck length; head cancel below.
+            ly *= neckLenN;
           } else if (isHeadSizeCtrl(entry.name)) {
             if (carrier === 'stature') {
               lx = headLocalUnderStature.x;
@@ -9557,6 +9861,8 @@
               ly = headAxes.y;
               lz = headAxes.z;
             }
+            // Undo neck-length Y so head size stays with head slider.
+            ly /= neckLenN;
           } else {
             // .006 + proportion CTRLs: bind local, then props; inherit via parent.
             lx = ly = lz = 1;
@@ -9610,11 +9916,21 @@
       return out;
     }
 
+    function formCtrlBoneNames(def) {
+      if (Array.isArray(def.targets) && def.targets.length) {
+        return def.targets.map((t) => t.bone).filter(Boolean);
+      }
+      return def.bone ? [def.bone] : [];
+    }
+
     function captureFormCtrlRests(root) {
       formCtrlRest.clear();
       formCtrlObjects.clear();
       if (!root) return 0;
-      const bones = new Set(Object.values(FORM_CTRL_DEFS).map((d) => d.bone));
+      const bones = new Set();
+      for (const def of Object.values(FORM_CTRL_DEFS)) {
+        for (const b of formCtrlBoneNames(def)) bones.add(b);
+      }
       let n = 0;
       for (const boneName of bones) {
         const o = findObjectByName(root, boneName);
@@ -9624,6 +9940,7 @@
         formCtrlRest.set(key, {
           pos: { x: o.position.x, y: o.position.y, z: o.position.z },
           scl: { x: o.scale.x, y: o.scale.y, z: o.scale.z },
+          quat: { x: o.quaternion.x, y: o.quaternion.y, z: o.quaternion.z, w: o.quaternion.w },
         });
         n += 1;
       }
@@ -9633,23 +9950,37 @@
     function applyFormCtrls() {
       if (!glbRoot || !formCtrlRest.size) return false;
       // Gather per-bone desired deltas from all form sliders.
-      const byBone = new Map(); // key -> { pos:{x,y,z}, scl:{x,y,z} } multipliers/offsets
-      for (const def of Object.values(FORM_CTRL_DEFS)) {
-        const key = normalizeBoneKey(def.bone);
+      const byBone = new Map(); // key -> { dPos, dScl, dRot }
+      const ensure = (key) => {
         if (!byBone.has(key)) {
           byBone.set(key, {
             dPos: { x: 0, y: 0, z: 0 },
             dScl: { x: 1, y: 1, z: 1 },
+            dRot: { x: 0, y: 0, z: 0 },
           });
         }
-        const slot = byBone.get(key);
+        return byBone.get(key);
+      };
+      for (const def of Object.values(FORM_CTRL_DEFS)) {
         const v = Math.max(-1, Math.min(1, +formCtrlValues[def.id] || 0));
         const axis = String(def.axis || 'x').toLowerCase();
         const amp = +def.amp || 0;
-        if (def.mode === 'pos') {
-          slot.dPos[axis] += v * amp;
-        } else if (def.mode === 'scl') {
-          slot.dScl[axis] *= (1 + v * amp);
+        const targets = Array.isArray(def.targets) && def.targets.length
+          ? def.targets
+          : [{ bone: def.bone, sign: 1 }];
+        for (const t of targets) {
+          if (!t?.bone) continue;
+          const key = normalizeBoneKey(t.bone);
+          const sign = t.sign == null ? 1 : +t.sign;
+          const slot = ensure(key);
+          const delta = v * amp * sign;
+          if (def.mode === 'pos') {
+            slot.dPos[axis] += delta;
+          } else if (def.mode === 'scl') {
+            slot.dScl[axis] *= (1 + delta);
+          } else if (def.mode === 'rot') {
+            slot.dRot[axis] += delta;
+          }
         }
       }
       for (const [key, delta] of byBone) {
@@ -9661,13 +9992,17 @@
           rest.pos.y + delta.dPos.y,
           rest.pos.z + delta.dPos.z,
         );
-        // Scale: compose with whatever applyCtrlScales already wrote this frame.
-        // Prefer rest * form so we don't fight height parents on this bone.
         o.scale.set(
           rest.scl.x * delta.dScl.x,
           rest.scl.y * delta.dScl.y,
           rest.scl.z * delta.dScl.z,
         );
+        o.quaternion.set(rest.quat.x, rest.quat.y, rest.quat.z, rest.quat.w);
+        if (delta.dRot.x || delta.dRot.y || delta.dRot.z) {
+          _formEuler.set(delta.dRot.x, delta.dRot.y, delta.dRot.z, 'XYZ');
+          _formQuat.setFromEuler(_formEuler);
+          o.quaternion.multiply(_formQuat);
+        }
       }
       return true;
     }
@@ -9750,6 +10085,7 @@
       if (!heightApplyEnabled || heightMode !== 'parents' || !heightParentBones.length) return false;
       applyCtrlScales(heightParentBones);
       applyChestFollowRotation();
+      applyNeckLengthHeadOffset();
       // Ground offset follows full body stature mul (weight-1 reference).
       applySceneGroundOffset(1 + 0.2 * bodyHeight);
       glbRoot?.updateMatrixWorld(true);
@@ -9918,6 +10254,270 @@
       legendEl.innerHTML = '';
     }
 
+    // —— Character preview textures (body / head / brow / eyes) ——
+    const textureLoader = new THREE.TextureLoader();
+    const TEX_URL = (file) => new URL(`./textures/${file}`, import.meta.url).href;
+    let irisHue = 0.58; // 0..1 → blue default
+    let characterTexturesOn = false;
+    let texCache = {}; // file -> THREE.Texture
+    let eyeMatRefs = []; // materials we can recolor
+
+    function irisColorFromHue(h) {
+      const col = new THREE.Color();
+      col.setHSL(Math.max(0, Math.min(1, +h || 0)), 0.72, 0.42);
+      return col;
+    }
+
+    function loadTex(file) {
+      if (texCache[file]) return Promise.resolve(texCache[file]);
+      return new Promise((resolve, reject) => {
+        textureLoader.load(
+          TEX_URL(file),
+          (tex) => {
+            tex.colorSpace = THREE.SRGBColorSpace;
+            tex.flipY = false; // glTF / Blender UV convention
+            tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+            texCache[file] = tex;
+            resolve(tex);
+          },
+          undefined,
+          reject,
+        );
+      });
+    }
+
+    /** Composite iris (tinted) + black pupil masks → CanvasTexture. */
+    async function buildIrisPupilMap(hue) {
+      const [irisTex, pupilTex] = await Promise.all([
+        loadTex('TOON_Iris.png'),
+        loadTex('TOON_Pupil.png'),
+      ]);
+      const w = irisTex.image?.width || 1024;
+      const h = irisTex.image?.height || 1024;
+      const irisCanvas = document.createElement('canvas');
+      irisCanvas.width = w;
+      irisCanvas.height = h;
+      const ictx = irisCanvas.getContext('2d');
+      ictx.drawImage(irisTex.image, 0, 0, w, h);
+      const irisData = ictx.getImageData(0, 0, w, h).data;
+      const pupilCanvas = document.createElement('canvas');
+      pupilCanvas.width = w;
+      pupilCanvas.height = h;
+      const pctx = pupilCanvas.getContext('2d');
+      pctx.drawImage(pupilTex.image, 0, 0, w, h);
+      const pupilData = pctx.getImageData(0, 0, w, h).data;
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      const out = ctx.createImageData(w, h);
+      const d = out.data;
+      const irisCol = irisColorFromHue(hue);
+      const ir = irisCol.r * 255;
+      const ig = irisCol.g * 255;
+      const ib = irisCol.b * 255;
+      for (let i = 0; i < d.length; i += 4) {
+        const irisA = irisData[i] / 255;
+        const pupilA = pupilData[i] / 255;
+        if (pupilA > 0.35) {
+          d[i] = 0;
+          d[i + 1] = 0;
+          d[i + 2] = 0;
+          d[i + 3] = 255;
+        } else if (irisA > 0.02) {
+          d[i] = ir * irisA + 242 * (1 - irisA);
+          d[i + 1] = ig * irisA + 242 * (1 - irisA);
+          d[i + 2] = ib * irisA + 242 * (1 - irisA);
+          d[i + 3] = 255;
+        } else {
+          d[i] = 242;
+          d[i + 1] = 242;
+          d[i + 2] = 242;
+          d[i + 3] = 255;
+        }
+      }
+      ctx.putImageData(out, 0, 0);
+      const map = new THREE.CanvasTexture(canvas);
+      map.colorSpace = THREE.SRGBColorSpace;
+      map.flipY = false;
+      map.needsUpdate = true;
+      return map;
+    }
+
+    /** Head albedo + eyebrow PNG (white bg treated as transparent) composited on top. */
+    async function buildHeadWithBrowsMap() {
+      const [headTex, browTex] = await Promise.all([
+        loadTex('Caucasian_Head_D.png'),
+        loadTex('EYEBROWS_1.png'),
+      ]);
+      const w = headTex.image?.width || 4096;
+      const h = headTex.image?.height || 4096;
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(headTex.image, 0, 0, w, h);
+      const out = ctx.getImageData(0, 0, w, h);
+      const od = out.data;
+
+      const browCanvas = document.createElement('canvas');
+      browCanvas.width = w;
+      browCanvas.height = h;
+      const bctx = browCanvas.getContext('2d');
+      bctx.drawImage(browTex.image, 0, 0, w, h);
+      const bd = bctx.getImageData(0, 0, w, h).data;
+
+      // Flat white (or near-white) = no brow; darker strokes blend over the face.
+      for (let i = 0; i < od.length; i += 4) {
+        const br = bd[i];
+        const bg = bd[i + 1];
+        const bb = bd[i + 2];
+        const luma = (br + bg + bb) / 3;
+        if (luma >= 245) continue;
+        const a = Math.min(1, (245 - luma) / 245);
+        od[i] = br * a + od[i] * (1 - a);
+        od[i + 1] = bg * a + od[i + 1] * (1 - a);
+        od[i + 2] = bb * a + od[i + 2] * (1 - a);
+      }
+      ctx.putImageData(out, 0, 0);
+      const map = new THREE.CanvasTexture(canvas);
+      map.colorSpace = THREE.SRGBColorSpace;
+      map.flipY = false;
+      map.needsUpdate = true;
+      return map;
+    }
+
+    function materialRole(name) {
+      const n = String(name || '').toLowerCase();
+      if (/outline|cycle/.test(n)) return 'outline';
+      if (/shine/.test(n)) return 'shine';
+      if (/eye/.test(n) && !/lid|lash/.test(n)) return 'eye';
+      if (/head|face/.test(n)) return 'head';
+      if (/brow/.test(n)) return 'brow'; // legacy separate brow mesh
+      if (/body|basemesh|female|skin/.test(n)) return 'body';
+      return null;
+    }
+
+    function makePreviewMat(map, opts) {
+      opts = opts || {};
+      const transparent = !!opts.transparent;
+      const alphaTest = opts.alphaTest || 0;
+      const emissiveHex = opts.emissive != null ? opts.emissive : 0x000000;
+      const eInt = opts.emissiveIntensity != null ? opts.emissiveIntensity : 0;
+      return new THREE.MeshStandardMaterial({
+        map: map || null,
+        color: 0xffffff,
+        roughness: 0.65,
+        metalness: 0.02,
+        transparent: transparent,
+        alphaTest: alphaTest,
+        emissive: new THREE.Color(emissiveHex),
+        emissiveIntensity: eInt,
+        emissiveMap: eInt > 0 ? map : null,
+        side: THREE.FrontSide,
+      });
+    }
+
+    async function applyCharacterTextures({ hue = irisHue } = {}) {
+      if (!glbRoot) return { ok: false, reason: 'no glb' };
+      backupMaterials();
+      const [bodyMap, headFaceMap, eyeMap] = await Promise.all([
+        loadTex('Caucasian_Body_D.png'),
+        buildHeadWithBrowsMap(),
+        buildIrisPupilMap(hue),
+      ]);
+      let shineMap = null;
+      try {
+        shineMap = await loadTex('EYES_shine.png');
+      } catch {
+        shineMap = null;
+      }
+      eyeMatRefs = [];
+      const report = { body: 0, head: 0, brow: 0, eye: 0, shine: 0, outline: 0, other: 0 };
+      glbRoot.traverse((o) => {
+        if (!o.isMesh) return;
+        const mats = Array.isArray(o.material) ? o.material : [o.material];
+        const next = mats.map((oldMat) => {
+          const role = materialRole(oldMat?.name) || materialRole(o.name) || materialRole(o.parent?.name);
+          if (role === 'outline') {
+            report.outline += 1;
+            o.visible = false;
+            return oldMat;
+          }
+          if (role === 'shine') {
+            report.shine += 1;
+            const mat = makePreviewMat(shineMap, {
+              transparent: true,
+              alphaTest: 0.05,
+              emissive: 0xffffff,
+              emissiveIntensity: shineMap ? 0.85 : 0,
+            });
+            if (!shineMap) {
+              mat.color.setHex(0xffffff);
+              mat.opacity = 0.35;
+              mat.transparent = true;
+            }
+            mat.name = oldMat?.name || 'shine';
+            return mat;
+          }
+          if (role === 'eye') {
+            report.eye += 1;
+            const mat = makePreviewMat(eyeMap);
+            mat.name = oldMat?.name || 'eyes';
+            eyeMatRefs.push(mat);
+            return mat;
+          }
+          if (role === 'head') {
+            report.head += 1;
+            const mat = makePreviewMat(headFaceMap);
+            mat.name = oldMat?.name || 'head';
+            return mat;
+          }
+          if (role === 'brow') {
+            // Legacy: separate brow mesh — brows already in headFaceMap for Head slot.
+            report.brow += 1;
+            const mat = makePreviewMat(headFaceMap, { transparent: true, alphaTest: 0.15 });
+            mat.name = oldMat?.name || 'brow';
+            return mat;
+          }
+          if (role === 'body') {
+            report.body += 1;
+            const mat = makePreviewMat(bodyMap);
+            mat.name = oldMat?.name || 'body';
+            return mat;
+          }
+          report.other += 1;
+          return oldMat;
+        });
+        o.material = next.length === 1 ? next[0] : next;
+        if (materialRole(mats[0]?.name) === 'outline' || materialRole(o.name) === 'outline') {
+          o.visible = false;
+        }
+      });
+      mapMode = 'textures';
+      characterTexturesOn = true;
+      irisHue = hue;
+      console.log('[textures]', report);
+      return { ok: true, ...report, irisHue: hue };
+    }
+
+    async function setIrisHue(h) {
+      irisHue = Math.max(0, Math.min(1, +h));
+      if (!characterTexturesOn || !glbRoot) return irisHue;
+      const eyeMap = await buildIrisPupilMap(irisHue);
+      if (eyeMatRefs.length) {
+        for (const mat of eyeMatRefs) {
+          if (mat.map && mat.map.isCanvasTexture) mat.map.dispose();
+          mat.map = eyeMap;
+          mat.needsUpdate = true;
+        }
+      } else {
+        // Re-run assign in case meshes appear; still updates cache for next apply.
+        await applyCharacterTextures({ hue: irisHue });
+      }
+      return irisHue;
+    }
+
     function setOutlineVisible(on) {
       glbRoot?.traverse((o) => {
         if (!o.isMesh) return;
@@ -9941,7 +10541,7 @@
         setOutlineVisible(false);
         showBbox = false;
         updateBboxHelper();
-        // slight clay shading if not in map mode
+        // Clay only when not already textured / debug-mapped.
         if (!mapMode) {
           backupMaterials();
           glbRoot?.traverse((o) => {
@@ -10492,6 +11092,12 @@
             : c.id === 'headSize'
               ? bodyHeadSize
               : (propValues[c.id] ?? 0);
+          const propDef = PROP_DEFS[c.id];
+          const amp = propDef?.amp != null
+            ? +propDef.amp
+            : (propDef?.range === 'big' || c.range === 'B' || c.range === 'big' ? 0.2 : 0.1);
+          const spanLo = +(1 - amp).toFixed(2);
+          const spanHi = +(1 + amp).toFixed(2);
           out.push({
             type: 'bone',
             id: c.id,
@@ -10502,9 +11108,18 @@
             min: -1,
             max: 1,
             anim: null,
+            scaleSpan: `×${spanLo}…${spanHi}`,
           });
         } else if (c.type === 'form') {
           const def = FORM_CTRL_DEFS[c.id];
+          const bones = def ? formCtrlBoneNames(def) : [];
+          const unit = def?.mode === 'pos'
+            ? `±${def.amp}m`
+            : def?.mode === 'rot'
+              ? `±${def.amp} rad`
+              : def?.mode === 'scl'
+                ? `×${(1 - (def.amp || 0)).toFixed(2)}…${(1 + (def.amp || 0)).toFixed(2)}`
+                : '';
           out.push({
             type: 'form',
             id: c.id,
@@ -10515,12 +11130,26 @@
             min: -1,
             max: 1,
             anim: null,
-            formBone: def?.bone || null,
+            formBone: bones.join(' + ') || null,
             formMode: def?.mode || null,
             formAxis: def?.axis || null,
             formAmp: def?.amp ?? 0,
-            positiveLabel: `${def?.mode || '?'}.${def?.axis || '?'} ±${def?.amp ?? 0}`,
-            negativeLabel: def?.bone || 'CTRL',
+            positiveLabel: `${def?.mode || '?'}.${def?.axis || '?'} ${unit}`.trim(),
+            negativeLabel: bones.length ? `${bones.length} bones · L+R same` : 'CTRL',
+          });
+        } else if (c.type === 'iris') {
+          out.push({
+            type: 'iris',
+            id: c.id,
+            label: c.label,
+            range: 'B',
+            boneMorph: false,
+            value: irisHue,
+            min: 0,
+            max: 1,
+            anim: null,
+            positiveLabel: 'hue',
+            negativeLabel: 'Iris color',
           });
         } else if (c.type === 'axis') {
           const def = SHAPE_AXIS_DEFS.find((d) => d.id === c.id);
@@ -10576,6 +11205,7 @@
       heightRestTRS.clear();
       if (!heightRecipe) await loadHeightRecipe();
       captureHeightRestScales(true);
+      captureNeckLengthRest(glbRoot);
       setupAnimations(gltf);
       // If CTRL-* overlay bones exist, drive them all from the H slider (anim-safe parents mode).
       heightParentBones = collectHeightParentBones(glbRoot);
@@ -10593,11 +11223,20 @@
       // After mixer init, re-apply procedural height from frozen bind rest.
       if (heightApplyEnabled) applyHeight();
       else refreshAfterPose();
+      let texInfo = null;
+      try {
+        texInfo = await applyCharacterTextures({ hue: irisHue });
+      } catch (err) {
+        console.warn('[textures] apply failed', err);
+      }
       baselineMetrics = lastMetrics ? { ...lastMetrics } : null;
       rebuildRulers(Math.max(2.0, (lastMetrics?.maxY || 1.5) + 0.3), 0.1);
       frameCharacter(glbRoot);
       const animInfo = animList().map((a) => a.name).join(',') || 'none';
-      statusEl.textContent = `Loaded · bones=${listBoneNames(glbRoot).length} · root=${heightRoot?.name || '—'} · anim=${animInfo} · mode=${heightMode}${heightParentBones.length ? ` · CTRL×${heightParentBones.length}` : ''}${formN ? ` · formCTRL×${formN}` : ''}${heightRootOverlay ? ' · ground' : ''} · shapekeys=${skInfo.keys}/${skInfo.groups.length}g`;
+      const texBit = texInfo?.ok
+        ? ` · tex body=${texInfo.body} brow=${texInfo.brow} eye=${texInfo.eye} head=${texInfo.head}`
+        : '';
+      statusEl.textContent = `Loaded · bones=${listBoneNames(glbRoot).length} · root=${heightRoot?.name || '—'} · anim=${animInfo} · mode=${heightMode}${heightParentBones.length ? ` · CTRL×${heightParentBones.length}` : ''}${formN ? ` · formCTRL×${formN}` : ''}${heightRootOverlay ? ' · ground' : ''} · shapekeys=${skInfo.keys}/${skInfo.groups.length}g${texBit}`;
       refreshHud();
       window._sandboxReady = true;
       return true;
@@ -10639,16 +11278,21 @@
       return true;
     };
     window.sandboxGetFormCtrls = () => ({ ...formCtrlValues });
-    window.sandboxListFormCtrls = () => Object.values(FORM_CTRL_DEFS).map((d) => ({
-      id: d.id,
-      label: d.label,
-      bone: d.bone,
-      mode: d.mode,
-      axis: d.axis,
-      amp: d.amp,
-      value: formCtrlValues[d.id] ?? 0,
-      found: formCtrlObjects.has(normalizeBoneKey(d.bone)),
-    }));
+    window.sandboxListFormCtrls = () => Object.values(FORM_CTRL_DEFS).map((d) => {
+      const bones = formCtrlBoneNames(d);
+      return {
+        id: d.id,
+        label: d.label,
+        bone: bones[0] || null,
+        bones,
+        mode: d.mode,
+        axis: d.axis,
+        amp: d.amp,
+        value: formCtrlValues[d.id] ?? 0,
+        found: bones.filter((b) => formCtrlObjects.has(normalizeBoneKey(b))).length,
+        expected: bones.length,
+      };
+    });
     window.sandboxGetProps = () => ({
       height: bodyHeight,
       headSize: bodyHeadSize,
@@ -10763,6 +11407,9 @@
     window.sandboxLoadGlb = loadGlbFromUrl;
     window.sandboxSetBbox = (on) => { showBbox = !!on; updateBboxHelper(); return true; };
     window.sandboxSetClarity = setClarityMode;
+    window.sandboxSetIrisHue = (h) => setIrisHue(h);
+    window.sandboxApplyTextures = () => applyCharacterTextures({ hue: irisHue });
+    window.sandboxGetIrisHue = () => irisHue;
     window.sandboxColorByMesh = colorByMeshParts;
     window.sandboxColorByBoneRegion = colorByBoneRegions;
     window.sandboxClearMap = () => { restoreMaterials(); if (clarityOn) setClarityMode(true); return true; };
@@ -11090,9 +11737,16 @@
       if (c.type === 'form') {
         return `−1…1 · ${c.negativeLabel || 'CTRL'} · ${c.positiveLabel || ''}`;
       }
+      if (c.type === 'iris') {
+        const hex = `#${irisColorFromHue(c.value ?? irisHue).getHexString()}`;
+        return `0…1 hue · pupil black · ${hex}`;
+      }
       if (c.type === 'bone') {
-        const span = c.range === 'B' ? '×0.8…1.2' : '×0.9…1.1';
-        return `−1…1 · ${span}`;
+        if (c.id === 'height' || c.id === 'headSize') {
+          const span = c.range === 'B' ? '×0.8…1.2' : '×0.9…1.1';
+          return `−1…1 · ${span}`;
+        }
+        return `−1…1 · ${c.scaleSpan || (c.range === 'B' ? '×0.8…1.2' : '×0.9…1.1')}`;
       }
       if (c.min >= 0) return `0…1 · ${c.positiveLabel || '+'}`;
       return `${c.negativeLabel || '−'} ← → ${c.positiveLabel || '+'}`;
@@ -11123,6 +11777,8 @@
         else window.sandboxSetProp(c.id, t);
       } else if (c.type === 'form') {
         window.sandboxSetFormCtrl(c.id, t);
+      } else if (c.type === 'iris') {
+        window.sandboxSetIrisHue?.(t);
       } else if (c.type === 'axis') {
         window.sandboxSetShapeAxis(c.id, t);
       }
@@ -11179,7 +11835,7 @@
         catSelect.appendChild(opt);
       }
       if (cats.length) {
-        const preferCat = cats.find((c) => c.id === 'bodyBones') || cats[0];
+        const preferCat = cats.find((c) => c.id === 'lidBones') || cats.find((c) => c.id === 'bodyBones') || cats[0];
         catSelect.value = preferCat.id;
         fillControls(preferCat.id);
       }
@@ -11197,6 +11853,10 @@
       btnMid.addEventListener('click', () => {
         const c = selectedControl();
         if (!c) return;
+        if (c.type === 'iris') {
+          applyUiValue(0.58);
+          return;
+        }
         const min = c.min ?? -1;
         const max = c.max ?? 1;
         applyUiValue((min + max) / 2);
