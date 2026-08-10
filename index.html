@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -139,7 +139,8 @@
       <h2>Recent changes</h2>
       <div class="wn-date">Aug 2026</div>
       <ul>
-        <li><strong>Eyes UI</strong> â€” trimmed eye shapekeys; lid bone CTRLs live under Eyes</li>
+        <li><strong>Shoulders</strong> — CTRL-ORG-shoulder L/R under stature; Shoulder width = Y; Chest width/thickness on tweak_spine.003</li>
+        <li><strong>Eyes UI</strong> — trimmed eye shapekeys; lid bone CTRLs live under Eyes</li>
         <li><strong>Orbit</strong> â€” sliders no longer snap the camera back while Orbit is on</li>
         <li><strong>Neck hierarchy</strong> â€” CTRL-ORG-spine.004 sibling of chest under CTRL-stature (shoulders no longer widen head)</li>
         <li><strong>Shoulder width</strong> â€” head cancels chest X/Z props so shoulders no longer widen the skull</li>
@@ -289,49 +290,80 @@
     // Extra proportion sliders (-1..1). Applied as local axis scales on CTRL bones.
     const propValues = {
       shoulderWidth: 0,
-      upperTorsoThickness: 0,
-      bellyThickness: 0,
+      chestWidth: 0,
+      chestThickness: 0,
+      waistWidth: 0,
+      waistThickness: 0,
+      hipWidth: 0,
+      hipThickness: 0,
       upperTorsoWidth: 0,
       armSize: 0,
       legsThickness: 0,
       hipBone: 0,
-      waistWidth: 0,
       neckLength: 0,
     };
-    // small â†’ Ã—0.9..1.1  |  big â†’ Ã—0.8..1.2  |  optional amp overrides (e.g. 0.3 â†’ Ã—0.7..1.3)
+    // small → ×0.9..1.1  |  big → ×0.8..1.2  |  amp / minMul+maxMul for custom spans
     const PROP_DEFS = {
       shoulderWidth: {
         id: 'shoulderWidth',
         label: 'Shoulder width',
-        range: 'small',
-        targets: [{ bone: 'CTRL-tweak_spine.003', axes: 'x' }],
-      },
-      upperTorsoThickness: {
-        id: 'upperTorsoThickness',
-        label: 'Upper torso thickness',
-        range: 'small',
+        range: 'small', // ×0.9…1.1
         targets: [
-          { bone: 'CTRL-tweak_spine.003', axes: 'z' },
-          { bone: 'CTRL-tweak_spine.002', axes: 'z' },
+          { bone: 'CTRL-ORG-shoulder.L', axes: 'y' },
+          { bone: 'CTRL-ORG-shoulder.R', axes: 'y' },
         ],
       },
-      bellyThickness: {
-        id: 'bellyThickness',
-        label: 'Waist thickness',
-        range: 'small',
-        targets: [{ bone: 'CTRL-tweak_spine.001', axes: 'z' }],
+      chestWidth: {
+        id: 'chestWidth',
+        label: 'Chest width',
+        range: 'custom',
+        minMul: 0.9,
+        maxMul: 1.3,
+        targets: [{ bone: 'CTRL-tweak_spine.003', axes: 'x' }],
+      },
+      chestThickness: {
+        id: 'chestThickness',
+        label: 'Chest thickness',
+        range: 'custom',
+        minMul: 0.9,
+        maxMul: 1.3,
+        targets: [{ bone: 'CTRL-tweak_spine.003', axes: 'z' }],
       },
       waistWidth: {
         id: 'waistWidth',
         label: 'Waist width',
         range: 'custom',
-        amp: 0.3, // Ã—0.7â€¦1.3
+        minMul: 0.9,
+        maxMul: 1.3,
+        targets: [{ bone: 'CTRL-tweak_spine.002', axes: 'x' }],
+      },
+      waistThickness: {
+        id: 'waistThickness',
+        label: 'Waist thickness',
+        range: 'custom',
+        minMul: 0.9,
+        maxMul: 1.3,
+        targets: [{ bone: 'CTRL-tweak_spine.002', axes: 'z' }],
+      },
+      hipWidth: {
+        id: 'hipWidth',
+        label: 'Hip width',
+        range: 'custom',
+        amp: 0.3, // ×0.7…1.3
         targets: [{ bone: 'CTRL-tweak_spine.001', axes: 'x' }],
+      },
+      hipThickness: {
+        id: 'hipThickness',
+        label: 'Hip thickness',
+        range: 'custom',
+        minMul: 0.9,
+        maxMul: 1.3,
+        targets: [{ bone: 'CTRL-tweak_spine.001', axes: 'z' }],
       },
       upperTorsoWidth: {
         id: 'upperTorsoWidth',
         label: 'Lats width',
-        range: 'big', // Ã—0.8â€¦1.2
+        range: 'big', // ×0.8…1.2
         targets: [{ bone: 'CTRL-DEF-spine.003', axes: 'x' }],
       },
       armSize: {
@@ -355,7 +387,7 @@
       hipBone: {
         id: 'hipBone',
         label: 'Hip bone',
-        range: 'big', // Ã—0.8â€¦1.2
+        range: 'big', // ×0.8…1.2
         targets: [{ bone: 'CTRL-tweak_spine', axes: 'x' }],
       },
     };
@@ -599,13 +631,16 @@
         controls: [
           { type: 'bone', id: 'height', label: 'Height', range: 'B' },
           { type: 'bone', id: 'shoulderWidth', label: 'Shoulder width', range: 'S' },
-          { type: 'bone', id: 'upperTorsoThickness', label: 'Upper torso thickness', range: 'S' },
+          { type: 'bone', id: 'chestWidth', label: 'Chest width', range: 'B' },
+          { type: 'bone', id: 'chestThickness', label: 'Chest thickness', range: 'B' },
           { type: 'bone', id: 'upperTorsoWidth', label: 'Lats width', range: 'B' },
           { type: 'bone', id: 'waistWidth', label: 'Waist width', range: 'B' },
-          { type: 'bone', id: 'bellyThickness', label: 'Waist thickness', range: 'S' },
+          { type: 'bone', id: 'waistThickness', label: 'Waist thickness', range: 'B' },
+          { type: 'bone', id: 'hipWidth', label: 'Hip width', range: 'B' },
+          { type: 'bone', id: 'hipThickness', label: 'Hip thickness', range: 'B' },
+          { type: 'bone', id: 'hipBone', label: 'Hip bone size', range: 'B' },
           { type: 'bone', id: 'armSize', label: 'Arm size', range: 'B' },
           { type: 'bone', id: 'legsThickness', label: 'Leg thickness', range: 'S' },
-          { type: 'bone', id: 'hipBone', label: 'Hip bone size', range: 'B' },
           { type: 'bone', id: 'neckLength', label: 'Neck length', range: 'B' },
         ],
       },
@@ -9743,9 +9778,16 @@
       return true;
     }
 
-    function propRangeMul(value, range, ampOverride) {
+    function propRangeMul(value, range, ampOverride, minMul, maxMul) {
       const v = Math.max(-1, Math.min(1, +value || 0));
-      // small: 0.9..1.1  |  big: 0.8..1.2  |  ampOverride wins (e.g. 0.3 â†’ 0.7..1.3)
+      // Asymmetric span: −1 → minMul, 0 → 1, +1 → maxMul (e.g. ×0.9…1.3)
+      if (minMul != null && maxMul != null && Number.isFinite(+minMul) && Number.isFinite(+maxMul)) {
+        const lo = +minMul;
+        const hi = +maxMul;
+        if (v >= 0) return 1 + (hi - 1) * v;
+        return 1 + (1 - lo) * v;
+      }
+      // small: 0.9..1.1  |  big: 0.8..1.2  |  ampOverride wins (e.g. 0.3 → 0.7..1.3)
       const amp = ampOverride != null && Number.isFinite(+ampOverride)
         ? +ampOverride
         : (range === 'big' ? 0.2 : 0.1);
@@ -9760,7 +9802,7 @@
         return out.get(key);
       };
       for (const def of Object.values(PROP_DEFS)) {
-        const mul = propRangeMul(propValues[def.id], def.range, def.amp);
+        const mul = propRangeMul(propValues[def.id], def.range, def.amp, def.minMul, def.maxMul);
         if (Math.abs(mul - 1) < 1e-9) continue;
         for (const t of def.targets) {
           const key = normalizeBoneKey(t.bone);
@@ -10257,7 +10299,7 @@
 
     // â€”â€” Character preview textures (body / head / brow / eyes) â€”â€”
     // Bump when publishing so GitHub Pages / browser caches cannot keep an old GLB or PNG.
-    const ASSET_REV = '20260810f';
+    const ASSET_REV = '20260810i';
     const textureLoader = new THREE.TextureLoader();
     const TEX_URL = (file) => new URL(`./textures/${file}?v=${ASSET_REV}`, import.meta.url).href;
     let irisHue = 0.58; // 0..1 â†’ blue default
@@ -11096,11 +11138,18 @@
               ? bodyHeadSize
               : (propValues[c.id] ?? 0);
           const propDef = PROP_DEFS[c.id];
-          const amp = propDef?.amp != null
-            ? +propDef.amp
-            : (propDef?.range === 'big' || c.range === 'B' || c.range === 'big' ? 0.2 : 0.1);
-          const spanLo = +(1 - amp).toFixed(2);
-          const spanHi = +(1 + amp).toFixed(2);
+          let spanLo;
+          let spanHi;
+          if (propDef?.minMul != null && propDef?.maxMul != null) {
+            spanLo = +(+propDef.minMul).toFixed(2);
+            spanHi = +(+propDef.maxMul).toFixed(2);
+          } else {
+            const amp = propDef?.amp != null
+              ? +propDef.amp
+              : (propDef?.range === 'big' || c.range === 'B' || c.range === 'big' ? 0.2 : 0.1);
+            spanLo = +(1 - amp).toFixed(2);
+            spanHi = +(1 + amp).toFixed(2);
+          }
           out.push({
             type: 'bone',
             id: c.id,
@@ -11111,7 +11160,7 @@
             min: -1,
             max: 1,
             anim: null,
-            scaleSpan: `Ã—${spanLo}â€¦${spanHi}`,
+            scaleSpan: `\u00d7${spanLo}\u2026${spanHi}`,
           });
         } else if (c.type === 'form') {
           const def = FORM_CTRL_DEFS[c.id];
