@@ -10255,8 +10255,10 @@
     }
 
     // —— Character preview textures (body / head / brow / eyes) ——
+    // Bump when publishing so GitHub Pages / browser caches cannot keep an old GLB or PNG.
+    const ASSET_REV = '20260810d';
     const textureLoader = new THREE.TextureLoader();
-    const TEX_URL = (file) => new URL(`./textures/${file}`, import.meta.url).href;
+    const TEX_URL = (file) => new URL(`./textures/${file}?v=${ASSET_REV}`, import.meta.url).href;
     let irisHue = 0.58; // 0..1 → blue default
     let characterTexturesOn = false;
     let texCache = {}; // file -> THREE.Texture
@@ -11704,7 +11706,7 @@
     window._sandboxReady = true;
 
     // —— Standalone browser UI (Node serve / START.bat). Skips if /models is unavailable (Flutter embed). ——
-    const DEFAULT_MODEL_URL = new URL('./models/height_overlay_clean.glb', import.meta.url).href;
+    const DEFAULT_MODEL_URL = new URL(`./models/height_overlay_clean.glb?v=${ASSET_REV}`, import.meta.url).href;
     const morphPanel = document.getElementById('morphPanel');
     const catSelect = document.getElementById('catSelect');
     const ctrlSelect = document.getElementById('ctrlSelect');
