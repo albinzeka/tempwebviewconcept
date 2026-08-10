@@ -661,6 +661,7 @@
           axisCtrl('Breast size', 'B', 'Large Breasts_0.4', 'Skinny Breasts'),
           axisCtrl('Butt size', 'B', 'Large Butt', 'Skinny Butt_0.5'),
           axisCtrl('Muscular morph', 'B', 'Muscles', 'Simplify Body'),
+          axisCtrl('Big belly', 'B', 'Big belly', null),
         ],
       },
       {
@@ -10299,7 +10300,7 @@
 
     // â€”â€” Character preview textures (body / head / brow / eyes) â€”â€”
     // Bump when publishing so GitHub Pages / browser caches cannot keep an old GLB or PNG.
-    const ASSET_REV = '20260810i';
+    const ASSET_REV = '20260810k';
     const textureLoader = new THREE.TextureLoader();
     const TEX_URL = (file) => new URL(`./textures/${file}?v=${ASSET_REV}`, import.meta.url).href;
     let irisHue = 0.58; // 0..1 â†’ blue default
