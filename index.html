@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -131,7 +131,7 @@
   </style>
 </head>
 <body>
-  <div id="hud">Loading…</div>
+  <div id="hud">Loadingâ€¦</div>
   <div id="legend"></div>
   <div id="whatsNew">
     <button type="button" id="whatsNewBtn" aria-expanded="false" aria-controls="whatsNewPanel">What's new?</button>
@@ -139,14 +139,18 @@
       <h2>Recent changes</h2>
       <div class="wn-date">Aug 2026</div>
       <ul>
-        <li><strong>Textures</strong> — body, head, eyebrows, iris &amp; pupil maps applied at runtime</li>
-        <li><strong>Eyebrows</strong> — white background keyed out so brows composite cleanly on the face</li>
-        <li><strong>Iris hue</strong> — Materials category slider to tint eye color</li>
-        <li><strong>Lid bones</strong> — eye master scale, lid root scale/rotate, lid B/T local Z controls</li>
-        <li><strong>Natural height</strong> — stature + leg tweak recipe (no amp UI); head stays stable while height changes</li>
-        <li><strong>Spine reparent</strong> — CTRL-tweak_spine.003 under CTRL-stature (fixes extruded neck on height)</li>
-        <li><strong>Body bones</strong> — lats width, waist width/thickness, hip size, neck length</li>
-        <li><strong>Model refresh</strong> — material-stripped GLB with Body / Head / Eyes / Shine slots</li>
+        <li><strong>Eyes UI</strong> â€” trimmed eye shapekeys; lid bone CTRLs live under Eyes</li>
+        <li><strong>Orbit</strong> â€” sliders no longer snap the camera back while Orbit is on</li>
+        <li><strong>Neck hierarchy</strong> â€” CTRL-ORG-spine.004 sibling of chest under CTRL-stature (shoulders no longer widen head)</li>
+        <li><strong>Shoulder width</strong> â€” head cancels chest X/Z props so shoulders no longer widen the skull</li>
+        <li><strong>Textures</strong> â€” body, head, eyebrows, iris &amp; pupil maps applied at runtime</li>
+        <li><strong>Eyebrows</strong> â€” white background keyed out so brows composite cleanly on the face</li>
+        <li><strong>Iris hue</strong> â€” Materials category slider to tint eye color</li>
+        <li><strong>Lid bones</strong> â€” eye master scale, lid root scale/rotate, lid B/T local Z controls</li>
+        <li><strong>Natural height</strong> â€” stature + leg tweak recipe (no amp UI); head stays stable while height changes</li>
+        <li><strong>Spine reparent</strong> â€” CTRL-tweak_spine.003 under CTRL-stature (fixes extruded neck on height)</li>
+        <li><strong>Body bones</strong> â€” lats width, waist width/thickness, hip size, neck length</li>
+        <li><strong>Model refresh</strong> â€” material-stripped GLB with Body / Head / Eyes / Shine slots</li>
       </ul>
     </div>
   </div>
@@ -163,7 +167,7 @@
       <select id="ctrlSelect"></select>
     </div>
     <div class="row">
-      <div class="val" id="ctrlValue">—</div>
+      <div class="val" id="ctrlValue">â€”</div>
       <div class="hint" id="ctrlHint"></div>
       <input id="ctrlSlider" type="range" min="-1" max="1" step="0.01" value="0" disabled />
     </div>
@@ -208,7 +212,7 @@
     scene.background = new THREE.Color(0x2a2a2a);
 
     const camera = new THREE.PerspectiveCamera(35, innerWidth / innerHeight, 0.05, 100);
-    // Full-body framing for ~1.6–1.8m standing character (was too low → legs-only shots).
+    // Full-body framing for ~1.6â€“1.8m standing character (was too low â†’ legs-only shots).
     camera.position.set(0, 1.05, 4.6);
     camera.lookAt(0, 0.85, 0);
 
@@ -294,7 +298,7 @@
       waistWidth: 0,
       neckLength: 0,
     };
-    // small → ×0.9..1.1  |  big → ×0.8..1.2  |  optional amp overrides (e.g. 0.3 → ×0.7..1.3)
+    // small â†’ Ã—0.9..1.1  |  big â†’ Ã—0.8..1.2  |  optional amp overrides (e.g. 0.3 â†’ Ã—0.7..1.3)
     const PROP_DEFS = {
       shoulderWidth: {
         id: 'shoulderWidth',
@@ -321,13 +325,13 @@
         id: 'waistWidth',
         label: 'Waist width',
         range: 'custom',
-        amp: 0.3, // ×0.7…1.3
+        amp: 0.3, // Ã—0.7â€¦1.3
         targets: [{ bone: 'CTRL-tweak_spine.001', axes: 'x' }],
       },
       upperTorsoWidth: {
         id: 'upperTorsoWidth',
         label: 'Lats width',
-        range: 'big', // ×0.8…1.2
+        range: 'big', // Ã—0.8â€¦1.2
         targets: [{ bone: 'CTRL-DEF-spine.003', axes: 'x' }],
       },
       armSize: {
@@ -351,15 +355,15 @@
       hipBone: {
         id: 'hipBone',
         label: 'Hip bone',
-        range: 'big', // ×0.8…1.2
+        range: 'big', // Ã—0.8â€¦1.2
         targets: [{ bone: 'CTRL-tweak_spine', axes: 'x' }],
       },
     };
 
     /**
-     * Form overlay CTRLs — local TRS after mixer / height.
-     * Slider −1…1 → delta = v * amp (* target.sign for mirror).
-     * scl: scale = rest * (1 + v*amp*sign)  [use amp 0.1 → ×0.9…1.1]
+     * Form overlay CTRLs â€” local TRS after mixer / height.
+     * Slider âˆ’1â€¦1 â†’ delta = v * amp (* target.sign for mirror).
+     * scl: scale = rest * (1 + v*amp*sign)  [use amp 0.1 â†’ Ã—0.9â€¦1.1]
      * pos: position = rest + v*amp*sign     [glTF meters; 0.001 = 1 mm]
      * rot: local Euler radians on axis from rest quat
      */
@@ -369,7 +373,7 @@
         label: 'Eye size horizontal',
         mode: 'scl',
         axis: 'x',
-        amp: 0.1, // ×0.9…1.1
+        amp: 0.1, // Ã—0.9â€¦1.1
         targets: [
           { bone: 'CTRL-eye_master.L', sign: 1 },
           { bone: 'CTRL-eye_master.R', sign: 1 },
@@ -380,7 +384,7 @@
         label: 'Eye size vertical',
         mode: 'scl',
         axis: 'z',
-        amp: 0.2, // ×0.8…1.2
+        amp: 0.2, // Ã—0.8â€¦1.2
         targets: [
           { bone: 'CTRL-eye_master.L', sign: 1 },
           { bone: 'CTRL-eye_master.R', sign: 1 },
@@ -508,7 +512,7 @@
     const _formQuat = new THREE.Quaternion();
 
     // Shape-key (morph target) catalog: group headers + synced influences by name across meshes.
-    let shapeKeyGroups = []; // [{ id, label, keys: string[] }] — mesh header groups (legacy/debug)
+    let shapeKeyGroups = []; // [{ id, label, keys: string[] }] â€” mesh header groups (legacy/debug)
     let shapeKeyValues = {}; // name -> -1..1
     let shapeKeyMeshes = []; // meshes that have morphs
     let shapeAxisValues = {}; // axisId -> -1..1 (or 0..1 for unipolar)
@@ -520,7 +524,7 @@
       return moveTestEnabled ? 'move test' : DEFAULT_LOOP_ANIM;
     }
 
-    /** Parse "Wide Head_0.5" / "Small Nose_-1" → { key, max }. Bare name → max 1. */
+    /** Parse "Wide Head_0.5" / "Small Nose_-1" â†’ { key, max }. Bare name â†’ max 1. */
     function parseShapeRef(raw) {
       const s = String(raw || '').trim().replace(/^\(+|,+$/g, '').replace(/\)+$/g, '');
       const m = s.match(/^(.*?)(?:_(-?\d+(?:\.\d+)?))$/);
@@ -530,7 +534,7 @@
       return { key: s, max: 1 };
     }
 
-    /** "A_0.4)+(B_0.4" or "A)+(B" or "A_0.5" → target list */
+    /** "A_0.4)+(B_0.4" or "A)+(B" or "A_0.5" â†’ target list */
     function parseTargetList(raw) {
       return String(raw || '')
         .split('+')
@@ -567,7 +571,7 @@
      * Spec:
      *   [Name]1=(KeyA_0.5)-1=(KeyB_0.2)
      *   [Name]1=(KeyA)+(KeyB){Anim Name}
-     *   [Name]1=(Key)                      → unipolar 0..1
+     *   [Name]1=(Key)                      â†’ unipolar 0..1
      *   Key_0.5 caps at 0.5; Key_-1 allows negative morph influence
      */
     const MORPH_CATEGORIES = [
@@ -613,24 +617,6 @@
         ],
       },
       {
-        id: 'lidBones',
-        label: 'Lid bones',
-        controls: [
-          { type: 'form', id: 'eyeMasterSclX', label: 'Eye size horizontal', range: 'S' },
-          { type: 'form', id: 'eyeMasterSclZ', label: 'Eye size vertical', range: 'B' },
-          { type: 'form', id: 'lidRootSclZ', label: 'Lid root scale Z', range: 'S' },
-          { type: 'form', id: 'lidRootRotY', label: 'Lid root rotate Y', range: 'S' },
-          { type: 'form', id: 'lidBLocZ', label: 'Lid B loc Z', range: 'S' },
-          { type: 'form', id: 'lidB001LocZ', label: 'Lid B.001 loc Z', range: 'S' },
-          { type: 'form', id: 'lidB002LocZ', label: 'Lid B.002 loc Z', range: 'S' },
-          { type: 'form', id: 'lidB003LocZ', label: 'Lid B.003 loc Z', range: 'S' },
-          { type: 'form', id: 'lidTLocZ', label: 'Lid T loc Z', range: 'S' },
-          { type: 'form', id: 'lidT001LocZ', label: 'Lid T.001 loc Z', range: 'S' },
-          { type: 'form', id: 'lidT002LocZ', label: 'Lid T.002 loc Z', range: 'S' },
-          { type: 'form', id: 'lidT003LocZ', label: 'Lid T.003 loc Z', range: 'S' },
-        ],
-      },
-      {
         id: 'bodyShapes',
         label: 'Body shapes',
         controls: [
@@ -646,18 +632,20 @@
         id: 'eyes',
         label: 'Eyes',
         controls: [
-          axisCtrl('Eyes vertical position', 'S', 'Upper Face Up_0.3', 'Upper Face Down_0.3'),
           axisCtrl('Eye size', 'B', 'Big Eyes_0.5', 'Small Eyes_0.3'),
-          axisCtrl('Eye horizontal', 'S', 'Eyes apart_0.4', 'Eyes closer_0.4'),
-          axisCtrl('Eye vertical', 'S', 'Eyes Down_0.4', 'Eyes Up_0.4'),
-          axisCtrl('Eye inner vertical', 'S', 'Eye inner up', 'Eye inner down'),
-          axisCtrl('Eye outer vertical', 'S', 'Eye outer up', 'Eye outer down'),
-          axisCtrl('Eye middle upper vertical', 'S', 'Eye middle upper up', 'Eye middle upper down'),
-          axisCtrl('Eye middle lower vertical', 'S', 'Eye middle lower up', 'Eye middle lower down'),
-          axisCtrl('Eye depth', 'S', 'Eyes out', 'Eyes in_0.3'),
-          axisCtrl('Eye rotation', 'S', 'Eye Clockwise_0.5', 'Eye Counterclockwise_0.5'),
-          axisCtrl('Eye squint', 'S', 'Angular Eyes', null),
           axisCtrl('Eye monolid', 'S', 'Monolid', null),
+          { type: 'form', id: 'eyeMasterSclX', label: 'Eye size horizontal', range: 'S' },
+          { type: 'form', id: 'eyeMasterSclZ', label: 'Eye size vertical', range: 'B' },
+          { type: 'form', id: 'lidRootSclZ', label: 'Lid root scale Z', range: 'S' },
+          { type: 'form', id: 'lidRootRotY', label: 'Lid root rotate Y', range: 'S' },
+          { type: 'form', id: 'lidBLocZ', label: 'Lid B loc Z', range: 'S' },
+          { type: 'form', id: 'lidB001LocZ', label: 'Lid B.001 loc Z', range: 'S' },
+          { type: 'form', id: 'lidB002LocZ', label: 'Lid B.002 loc Z', range: 'S' },
+          { type: 'form', id: 'lidB003LocZ', label: 'Lid B.003 loc Z', range: 'S' },
+          { type: 'form', id: 'lidTLocZ', label: 'Lid T loc Z', range: 'S' },
+          { type: 'form', id: 'lidT001LocZ', label: 'Lid T.001 loc Z', range: 'S' },
+          { type: 'form', id: 'lidT002LocZ', label: 'Lid T.002 loc Z', range: 'S' },
+          { type: 'form', id: 'lidT003LocZ', label: 'Lid T.003 loc Z', range: 'S' },
         ],
       },
       {
@@ -790,7 +778,7 @@
     /*__HEIGHT_RECIPE_EMBED_START__*/
     const EMBEDDED_HEIGHT_RECIPE = {
   "version": 4,
-  "note": "Procedural TRS recipe from Height anim — do NOT play clip at runtime",
+  "note": "Procedural TRS recipe from Height anim â€” do NOT play clip at runtime",
   "bones": [
     {
       "bone": "DEF-footL",
@@ -8930,7 +8918,7 @@
     let heightMulCache = new Map();
     // heightMode: 'recipe' | 'overlay' | 'root' | 'parents' | 'off'
     // parents = scale all CTRL-* overlay bones from captured rest (anim-safe)
-    let heightParentBones = []; // [{name, object, rest:{x,y,z}}] — scale drivers (excludes CTRL-root)
+    let heightParentBones = []; // [{name, object, rest:{x,y,z}}] â€” scale drivers (excludes CTRL-root)
     let heightRootOverlay = null; // CTRL-root (structural parent; keep at rest)
     let heightRootRestPos = null; // {x,y,z} local
     let heightSceneRestY = 0; // glbRoot scene Y at load
@@ -8949,7 +8937,7 @@
     const CTRL_PREFIXES = ['CTRL-', 'HEIGHT-'];
     const HEAD_BASE = 1.2; // visual base at head slider 0
     const NECK_WEIGHT = 0.2; // .004 share of stature/head scale deltas
-    const NECK_LENGTH_AMP = 0.2; // neckLength −1…1 → ×0.8…1.2 + head lift
+    const NECK_LENGTH_AMP = 0.2; // neckLength âˆ’1â€¦1 â†’ Ã—0.8â€¦1.2 + head lift
     /** Rest snapshot for neck-length recipe (head local pos + axis length). */
     let neckLengthRest = null; // { headName, headPos:{x,y,z}, axisLen }
     const isCtrlBone = (name) => CTRL_PREFIXES.some((p) => String(name || '').startsWith(p));
@@ -8963,17 +8951,17 @@
       return n;
     };
     const isStatureCtrl = (name) => /^stature$/i.test(ctrlSuffix(name));
-    const isHeadNeckCtrl = (name) => { // .004 — neck + some head
+    const isHeadNeckCtrl = (name) => { // .004 â€” neck + some head
       const n = String(name || '');
       if (!isCtrlBone(n)) return false;
       return /ORG-spine\.?004$/i.test(ctrlSuffix(n)) || /ORG-spine\.?004$/i.test(n);
     };
-    const isHeadSizeCtrl = (name) => { // .005 — chin/jaw + head (primary)
+    const isHeadSizeCtrl = (name) => { // .005 â€” chin/jaw + head (primary)
       const n = String(name || '');
       if (!isCtrlBone(n)) return false;
       return /ORG-spine\.?005$/i.test(ctrlSuffix(n)) || /ORG-spine\.?005$/i.test(n);
     };
-    const isHeadTipCtrl = (name) => { // .006 — leave at bind (inherits .005)
+    const isHeadTipCtrl = (name) => { // .006 â€” leave at bind (inherits .005)
       const n = String(name || '');
       if (!isCtrlBone(n)) return false;
       return /ORG-spine\.?006$/i.test(ctrlSuffix(n)) || /ORG-spine\.?006$/i.test(n);
@@ -8986,7 +8974,7 @@
       if (!isCtrlBone(n)) return false;
       return /tweak_spine\.?003$/i.test(ctrlSuffix(n)) || /tweak_spine\.?003$/i.test(n);
     };
-    /** Leg length drivers — Y only; excludes foot tweaks. */
+    /** Leg length drivers â€” Y only; excludes foot tweaks. */
     const isLegLengthCtrl = (name) => {
       const n = String(name || '');
       if (!isCtrlBone(n)) return false;
@@ -9131,6 +9119,18 @@
       }
     }
 
+    /** Prop axis muls on the nearest chest CTRL ancestor (undo on head so shoulder width stays on torso). */
+    function chestPropMulAncestor(obj, propMuls) {
+      let p = obj?.parent;
+      let guard = 0;
+      while (p && guard++ < 64) {
+        if (isChestHeightCtrl(p.name)) return propMulForEntry(p.name, propMuls);
+        if (isStatureCtrl(p.name)) break;
+        p = p.parent;
+      }
+      return { x: 1, y: 1, z: 1 };
+    }
+
     function resolveHeightRoot(root) {
       for (const n of HEIGHT_ROOT_CANDIDATES) {
         const o = findObjectByName(root, n);
@@ -9161,7 +9161,7 @@
       const box = new THREE.Box3();
       const tmp = new THREE.Vector3();
       let any = false;
-      // Bones only — SkinnedMesh setFromObject uses bind pose and hides real height.
+      // Bones only â€” SkinnedMesh setFromObject uses bind pose and hides real height.
       if (skel) {
         for (const b of skel.bones) {
           if (!b.name || /MCH-|ORG-|tweak|ik|fk|widget|handle/i.test(b.name)) {
@@ -9267,7 +9267,7 @@
         head.getWorldPosition(wp);
         faceY = wp.y;
       }
-      // Closer framing than full-body — roughly head+neck crop
+      // Closer framing than full-body â€” roughly head+neck crop
       const dist = Math.max(height * 0.85, m.box.size.x * 1.4, 1.35);
       camera.position.set(centerX, faceY, centerZ + dist);
       controls.target.set(centerX, faceY - height * 0.02, centerZ);
@@ -9316,10 +9316,10 @@
       const b = baselineMetrics;
       hudEl.innerHTML = [
         `<div><b>Height sandbox</b> (fixed cam ${controls.enabled ? 'OFF' : 'ON'})</div>`,
-        `<div>root: <b>${heightRoot?.name || '—'}</b></div>`,
-        `<div>H = <b>${bodyHeight.toFixed(2)}</b> · head = <b>${bodyHeadSize.toFixed(2)}</b> · props ${Object.entries(propValues).map(([k, v]) => `${k[0]}${v.toFixed(1)}`).join(' ')}</div>`,
-        m ? `<div>heightY=<b>${m.heightY}</b> widthX=<b>${m.widthX}</b> ratio=<b>${m.ratio}</b></div>` : `<div>metrics: —</div>`,
-        b && m ? `<div>ΔY=<b>${(m.heightY - b.heightY).toFixed(4)}</b> ΔX=<b>${(m.widthX - b.widthX).toFixed(4)}</b></div>` : '',
+        `<div>root: <b>${heightRoot?.name || 'â€”'}</b></div>`,
+        `<div>H = <b>${bodyHeight.toFixed(2)}</b> Â· head = <b>${bodyHeadSize.toFixed(2)}</b> Â· props ${Object.entries(propValues).map(([k, v]) => `${k[0]}${v.toFixed(1)}`).join(' ')}</div>`,
+        m ? `<div>heightY=<b>${m.heightY}</b> widthX=<b>${m.widthX}</b> ratio=<b>${m.ratio}</b></div>` : `<div>metrics: â€”</div>`,
+        b && m ? `<div>Î”Y=<b>${(m.heightY - b.heightY).toFixed(4)}</b> Î”X=<b>${(m.widthX - b.widthX).toFixed(4)}</b></div>` : '',
         `<div>${gateLabel()}</div>`,
       ].join('');
     }
@@ -9452,8 +9452,8 @@
     }
 
     function applyHeightCompose() {
-      // Best anim-safe tradeoff: recipe⊗IdleΔ on stature bones; leave arms to mixer (Waving).
-      // Idle body motion on torso is still limited — those channels are in the height recipe.
+      // Best anim-safe tradeoff: recipeâŠ—IdleÎ” on stature bones; leave arms to mixer (Waving).
+      // Idle body motion on torso is still limited â€” those channels are in the height recipe.
       if (!heightApplyEnabled || heightMode !== 'compose' || !heightRecipe?.bones || !glbRoot) return false;
       if (!heightRestTRS.size) captureHeightRestScales(true);
       for (const entry of heightRecipe.bones) {
@@ -9509,7 +9509,7 @@
 
     function applyHeightMul() {
       // Anim-safe: re-sample mixer pose (absolute), then multiply stature factors once.
-      // At H=mid factors are 1 / deltas 0 → animation unchanged.
+      // At H=mid factors are 1 / deltas 0 â†’ animation unchanged.
       if (!heightApplyEnabled || heightMode !== 'mul' || !heightRecipe?.bones || !glbRoot) return false;
       if (mixer) mixer.update(0);
       heightMulCache.clear();
@@ -9541,7 +9541,7 @@
     }
 
     function applyHeightOverlay() {
-      // Drive CTRL-* parents of Rigify tweak/ORG sources (not DEF — DEF uses world Copy Transforms).
+      // Drive CTRL-* parents of Rigify tweak/ORG sources (not DEF â€” DEF uses world Copy Transforms).
       // Children keep Idle/Waving; height is inherited through constraint sources.
       if (!heightApplyEnabled || heightMode !== 'overlay' || !heightRecipe?.bones || !glbRoot) return false;
       if (!heightRestTRS.size) captureHeightRestScales(true);
@@ -9676,7 +9676,7 @@
     }
 
     function headSizeMul() {
-      // Bind rest looks small; former slider max (×1.2) is the visual base at head=0.
+      // Bind rest looks small; former slider max (Ã—1.2) is the visual base at head=0.
       return HEAD_BASE * (1 + 0.2 * bodyHeadSize);
     }
 
@@ -9689,7 +9689,7 @@
       return { x: widthMul, y: mul, z: widthMul };
     }
 
-    /** World neck target ≈ (1 + NECK_WEIGHT*(S-1)) * headNeck share. */
+    /** World neck target â‰ˆ (1 + NECK_WEIGHT*(S-1)) * headNeck share. */
     function neckWorldAxis(statureS, headAxis) {
       const fromStature = 1 + NECK_WEIGHT * (statureS - 1);
       const fromHead = 1 + NECK_WEIGHT * (headAxis / HEAD_BASE - 1);
@@ -9706,7 +9706,7 @@
     }
 
     /**
-     * Capture head CTRL local rest + neck→head world length so we can lift the
+     * Capture head CTRL local rest + neckâ†’head world length so we can lift the
      * head when lengthening (scale alone often does not read as a longer neck).
      */
     function captureNeckLengthRest(root) {
@@ -9728,7 +9728,7 @@
       return true;
     }
 
-    /** Push head along local +Y by (N−1)×neck length after height/prop scales. */
+    /** Push head along local +Y by (Nâˆ’1)Ã—neck length after height/prop scales. */
     function applyNeckLengthHeadOffset() {
       if (!glbRoot || !neckLengthRest) return false;
       const head = findObjectByName(glbRoot, neckLengthRest.headName);
@@ -9745,7 +9745,7 @@
 
     function propRangeMul(value, range, ampOverride) {
       const v = Math.max(-1, Math.min(1, +value || 0));
-      // small: 0.9..1.1  |  big: 0.8..1.2  |  ampOverride wins (e.g. 0.3 → 0.7..1.3)
+      // small: 0.9..1.1  |  big: 0.8..1.2  |  ampOverride wins (e.g. 0.3 â†’ 0.7..1.3)
       const amp = ampOverride != null && Number.isFinite(+ampOverride)
         ? +ampOverride
         : (range === 'big' ? 0.2 : 0.1);
@@ -9797,7 +9797,7 @@
         y: neckLocalAxis(syTorso, headAxes.y),
         z: neckLocalAxis(sxz, headAxes.z),
       };
-      // Cancel inherited stature so world head ≈ headAxes (not squished/tall with height).
+      // Cancel inherited stature so world head â‰ˆ headAxes (not squished/tall with height).
       const headCancelStature = {
         x: headAxes.x / sxz,
         y: headAxes.y / syTorso,
@@ -9826,13 +9826,13 @@
           } else if (isLegLengthCtrl(entry.name)) {
             ly = syLeg;
           } else if (isChestHeightCtrl(entry.name) && !carrier) {
-            // Legacy: under spine_fk.003 — drive chest stature here.
+            // Legacy: under spine_fk.003 â€” drive chest stature here.
             lx = sxz;
             ly = syTorso;
             lz = sxz;
           } else if (isHeadNeckCtrl(entry.name)) {
             if (carrier === 'stature') {
-              // Legacy: child of CTRL-stature → compensated local.
+              // Legacy: child of CTRL-stature â†’ compensated local.
               lx = neckUnderStature.x;
               ly = neckUnderStature.y;
               lz = neckUnderStature.z;
@@ -9852,10 +9852,11 @@
               ly = headLocalUnderStature.y;
               lz = headLocalUnderStature.z;
             } else if (carrier === 'chest') {
-              // Inherit stature via chest — undo XZ/Y so head size stays constant with H.
-              lx = headCancelStature.x;
-              ly = headCancelStature.y;
-              lz = headCancelStature.z;
+              // Inherit stature (+ shoulder/torso props) via chest â€” undo both.
+              const cp = chestPropMulAncestor(o, propMuls);
+              lx = headCancelStature.x / cp.x;
+              ly = headCancelStature.y / cp.y;
+              lz = headCancelStature.z / cp.z;
             } else {
               lx = headAxes.x;
               ly = headAxes.y;
@@ -10124,8 +10125,8 @@
       }
       lastMetrics = glbRoot ? computeMeshMetrics(glbRoot) : null;
       if (showBbox) updateBboxHelper();
-      // Keep face crop locked while scrubbing height / head size
-      if (cameraFraming === 'face') frameFace(glbRoot);
+      // Face crop only when camera is fixed â€” orbit mode must keep the user's view.
+      if (cameraFraming === 'face' && !controls.enabled) frameFace(glbRoot);
       refreshHud();
       return ok;
     }
@@ -10254,12 +10255,12 @@
       legendEl.innerHTML = '';
     }
 
-    // —— Character preview textures (body / head / brow / eyes) ——
+    // â€”â€” Character preview textures (body / head / brow / eyes) â€”â€”
     // Bump when publishing so GitHub Pages / browser caches cannot keep an old GLB or PNG.
-    const ASSET_REV = '20260810d';
+    const ASSET_REV = '20260810f';
     const textureLoader = new THREE.TextureLoader();
     const TEX_URL = (file) => new URL(`./textures/${file}?v=${ASSET_REV}`, import.meta.url).href;
-    let irisHue = 0.58; // 0..1 → blue default
+    let irisHue = 0.58; // 0..1 â†’ blue default
     let characterTexturesOn = false;
     let texCache = {}; // file -> THREE.Texture
     let eyeMatRefs = []; // materials we can recolor
@@ -10288,7 +10289,7 @@
       });
     }
 
-    /** Composite iris (tinted) + black pupil masks → CanvasTexture. */
+    /** Composite iris (tinted) + black pupil masks â†’ CanvasTexture. */
     async function buildIrisPupilMap(hue) {
       const [irisTex, pupilTex] = await Promise.all([
         loadTex('TOON_Iris.png'),
@@ -10476,7 +10477,7 @@
             return mat;
           }
           if (role === 'brow') {
-            // Legacy: separate brow mesh — brows already in headFaceMap for Head slot.
+            // Legacy: separate brow mesh â€” brows already in headFaceMap for Head slot.
             report.brow += 1;
             const mat = makePreviewMat(headFaceMap, { transparent: true, alphaTest: 0.15 });
             mat.name = oldMat?.name || 'brow';
@@ -10614,7 +10615,7 @@
         color: MESH_COLORS[name] || '#868e96',
         guess: REGION_BY_ID[meshRegionGuess(name)]?.label || name,
       }));
-      showLegend(legend.map((e) => ({ id: e.name, label: `${e.name} → ${e.guess}`, color: e.color })));
+      showLegend(legend.map((e) => ({ id: e.name, label: `${e.name} â†’ ${e.guess}`, color: e.color })));
       return { mode: 'mesh', legend };
     }
 
@@ -10666,7 +10667,7 @@
           colors[i * 3 + 2] = tmp.b;
 
           if (!anchors[rid]) anchors[rid] = { x: 0, y: 0, z: 0, n: 0 };
-          // approximate local vertex → later world via mesh matrix (use bind-ish)
+          // approximate local vertex â†’ later world via mesh matrix (use bind-ish)
           const a = anchors[rid];
           a.x += pos.getX(i); a.y += pos.getY(i); a.z += pos.getZ(i); a.n++;
         }
@@ -10878,7 +10879,7 @@
             header: name,
             keys: [],
           };
-          // Headers are not adjustable — leave influence at 0, do not put in shapeKeyValues.
+          // Headers are not adjustable â€” leave influence at 0, do not put in shapeKeyValues.
           continue;
         }
         current.keys.push(name);
@@ -10904,7 +10905,7 @@
 
     function applyShapeKeyByName(name, value) {
       const resolved = findShapeKeyName(name) || name;
-      // Allow signed morphs (e.g. Small Nose_-1 → influence -1)
+      // Allow signed morphs (e.g. Small Nose_-1 â†’ influence -1)
       const v = Math.max(-1, Math.min(1, +value || 0));
       shapeKeyValues[resolved] = v;
       for (const mesh of shapeKeyMeshes) {
@@ -10972,7 +10973,7 @@
         morphAnimPreferred = def.anim;
         const r = playAnimByName(def.anim);
         if (!r.ok) {
-          // Clip not in GLB yet — keep current loop, surface warning in HUD via console
+          // Clip not in GLB yet â€” keep current loop, surface warning in HUD via console
           console.warn('[morph-anim] tagged clip not in GLB:', def.anim, '(have:', animList().map((a) => a.name).join(', '), ')');
         }
         return;
@@ -11053,7 +11054,7 @@
           min: def.unipolar ? 0 : -1,
           max: 1,
           anim: def.anim || null,
-          negativeLabel: negKeys[0] || '−',
+          negativeLabel: negKeys[0] || 'âˆ’',
           positiveLabel: posKeys[0] || '+',
           negativeMax: def.negative?.[0]?.max ?? 1,
           positiveMax: def.positive?.[0]?.max ?? 1,
@@ -11110,17 +11111,17 @@
             min: -1,
             max: 1,
             anim: null,
-            scaleSpan: `×${spanLo}…${spanHi}`,
+            scaleSpan: `Ã—${spanLo}â€¦${spanHi}`,
           });
         } else if (c.type === 'form') {
           const def = FORM_CTRL_DEFS[c.id];
           const bones = def ? formCtrlBoneNames(def) : [];
           const unit = def?.mode === 'pos'
-            ? `±${def.amp}m`
+            ? `Â±${def.amp}m`
             : def?.mode === 'rot'
-              ? `±${def.amp} rad`
+              ? `Â±${def.amp} rad`
               : def?.mode === 'scl'
-                ? `×${(1 - (def.amp || 0)).toFixed(2)}…${(1 + (def.amp || 0)).toFixed(2)}`
+                ? `Ã—${(1 - (def.amp || 0)).toFixed(2)}â€¦${(1 + (def.amp || 0)).toFixed(2)}`
                 : '';
           out.push({
             type: 'form',
@@ -11137,7 +11138,7 @@
             formAxis: def?.axis || null,
             formAmp: def?.amp ?? 0,
             positiveLabel: `${def?.mode || '?'}.${def?.axis || '?'} ${unit}`.trim(),
-            negativeLabel: bones.length ? `${bones.length} bones · L+R same` : 'CTRL',
+            negativeLabel: bones.length ? `${bones.length} bones Â· L+R same` : 'CTRL',
           });
         } else if (c.type === 'iris') {
           out.push({
@@ -11172,7 +11173,7 @@
             positiveKey: pos.map((t) => t.key).join('+') || null,
             negativeMax: neg[0]?.max ?? 1,
             positiveMax: pos[0]?.max ?? 1,
-            negativeLabel: neg.map((t) => `${t.key}${t.max !== 1 ? '@' + t.max : ''}`).join('+') || '−',
+            negativeLabel: neg.map((t) => `${t.key}${t.max !== 1 ? '@' + t.max : ''}`).join('+') || 'âˆ’',
             positiveLabel: pos.map((t) => `${t.key}${t.max !== 1 ? '@' + t.max : ''}`).join('+') || '+',
           });
         }
@@ -11181,7 +11182,7 @@
     }
 
     async function loadGlbFromUrl(url) {
-      statusEl.textContent = 'Loading GLB…';
+      statusEl.textContent = 'Loading GLBâ€¦';
       if (!heightRecipe) await loadHeightRecipe();
       const gltf = await new GLTFLoader().loadAsync(url);
       if (glbRoot) scene.remove(glbRoot);
@@ -11236,9 +11237,9 @@
       frameCharacter(glbRoot);
       const animInfo = animList().map((a) => a.name).join(',') || 'none';
       const texBit = texInfo?.ok
-        ? ` · tex body=${texInfo.body} brow=${texInfo.brow} eye=${texInfo.eye} head=${texInfo.head}`
+        ? ` Â· tex body=${texInfo.body} brow=${texInfo.brow} eye=${texInfo.eye} head=${texInfo.head}`
         : '';
-      statusEl.textContent = `Loaded · bones=${listBoneNames(glbRoot).length} · root=${heightRoot?.name || '—'} · anim=${animInfo} · mode=${heightMode}${heightParentBones.length ? ` · CTRL×${heightParentBones.length}` : ''}${formN ? ` · formCTRL×${formN}` : ''}${heightRootOverlay ? ' · ground' : ''} · shapekeys=${skInfo.keys}/${skInfo.groups.length}g${texBit}`;
+      statusEl.textContent = `Loaded Â· bones=${listBoneNames(glbRoot).length} Â· root=${heightRoot?.name || 'â€”'} Â· anim=${animInfo} Â· mode=${heightMode}${heightParentBones.length ? ` Â· CTRLÃ—${heightParentBones.length}` : ''}${formN ? ` Â· formCTRLÃ—${formN}` : ''}${heightRootOverlay ? ' Â· ground' : ''} Â· shapekeys=${skInfo.keys}/${skInfo.groups.length}g${texBit}`;
       refreshHud();
       window._sandboxReady = true;
       return true;
@@ -11345,7 +11346,7 @@
       positiveKey: (def.positive || []).map((t) => t.key).join('+') || null,
       negativeMax: def.negative?.[0]?.max ?? 1,
       positiveMax: def.positive?.[0]?.max ?? 1,
-      negativeLabel: (def.negative || []).map((t) => t.key).join('+') || '−',
+      negativeLabel: (def.negative || []).map((t) => t.key).join('+') || 'âˆ’',
       positiveLabel: (def.positive || []).map((t) => t.key).join('+') || '+',
       unipolar: !!def.unipolar,
     }));
@@ -11675,8 +11676,8 @@
       requestAnimationFrame(frame);
       const dt = clock.getDelta();
       // Procedural height every frame AFTER mixer.
-      // recipe/overlay: absolute write — safe every frame.
-      // mul: relative multiply — ONLY after mixer.update, else it compounds.
+      // recipe/overlay: absolute write â€” safe every frame.
+      // mul: relative multiply â€” ONLY after mixer.update, else it compounds.
       if (mixer && animPlaying) {
         mixer.update(dt);
         if (heightApplyEnabled && heightMode === 'recipe' && glbRoot) applyHeightRecipe();
@@ -11701,11 +11702,11 @@
       renderer.render(scene, camera);
     })();
     refreshHud();
-    statusEl.textContent = 'Waiting for GLB…';
+    statusEl.textContent = 'Waiting for GLBâ€¦';
     loadHeightRecipe();
     window._sandboxReady = true;
 
-    // —— Standalone browser UI (Node serve / START.bat). Skips if /models is unavailable (Flutter embed). ——
+    // â€”â€” Standalone browser UI (Node serve / START.bat). Skips if /models is unavailable (Flutter embed). â€”â€”
     const DEFAULT_MODEL_URL = new URL(`./models/height_overlay_clean.glb?v=${ASSET_REV}`, import.meta.url).href;
     const morphPanel = document.getElementById('morphPanel');
     const catSelect = document.getElementById('catSelect');
@@ -11737,27 +11738,27 @@
     function valueHint(c) {
       if (!c) return '';
       if (c.type === 'form') {
-        return `−1…1 · ${c.negativeLabel || 'CTRL'} · ${c.positiveLabel || ''}`;
+        return `âˆ’1â€¦1 Â· ${c.negativeLabel || 'CTRL'} Â· ${c.positiveLabel || ''}`;
       }
       if (c.type === 'iris') {
         const hex = `#${irisColorFromHue(c.value ?? irisHue).getHexString()}`;
-        return `0…1 hue · pupil black · ${hex}`;
+        return `0â€¦1 hue Â· pupil black Â· ${hex}`;
       }
       if (c.type === 'bone') {
         if (c.id === 'height' || c.id === 'headSize') {
-          const span = c.range === 'B' ? '×0.8…1.2' : '×0.9…1.1';
-          return `−1…1 · ${span}`;
+          const span = c.range === 'B' ? 'Ã—0.8â€¦1.2' : 'Ã—0.9â€¦1.1';
+          return `âˆ’1â€¦1 Â· ${span}`;
         }
-        return `−1…1 · ${c.scaleSpan || (c.range === 'B' ? '×0.8…1.2' : '×0.9…1.1')}`;
+        return `âˆ’1â€¦1 Â· ${c.scaleSpan || (c.range === 'B' ? 'Ã—0.8â€¦1.2' : 'Ã—0.9â€¦1.1')}`;
       }
-      if (c.min >= 0) return `0…1 · ${c.positiveLabel || '+'}`;
-      return `${c.negativeLabel || '−'} ← → ${c.positiveLabel || '+'}`;
+      if (c.min >= 0) return `0â€¦1 Â· ${c.positiveLabel || '+'}`;
+      return `${c.negativeLabel || 'âˆ’'} â† â†’ ${c.positiveLabel || '+'}`;
     }
 
     function refreshValueLabel() {
       const c = selectedControl();
       if (!c) {
-        ctrlValueEl.textContent = '—';
+        ctrlValueEl.textContent = 'â€”';
         ctrlHintEl.textContent = '';
         return;
       }
@@ -11837,7 +11838,7 @@
         catSelect.appendChild(opt);
       }
       if (cats.length) {
-        const preferCat = cats.find((c) => c.id === 'lidBones') || cats.find((c) => c.id === 'bodyBones') || cats[0];
+        const preferCat = cats.find((c) => c.id === 'eyes') || cats.find((c) => c.id === 'bodyBones') || cats[0];
         catSelect.value = preferCat.id;
         fillControls(preferCat.id);
       }
@@ -11892,7 +11893,7 @@
       try {
         const res = await fetch(url, { method: 'HEAD', cache: 'no-store' });
         if (res.ok) return true;
-        // Some static servers omit HEAD — try a tiny ranged GET
+        // Some static servers omit HEAD â€” try a tiny ranged GET
         const get = await fetch(url, { method: 'GET', headers: { Range: 'bytes=0-0' }, cache: 'no-store' });
         return get.ok || get.status === 206;
       } catch {
@@ -11902,10 +11903,10 @@
 
     async function bootStandalone() {
       if (!(await modelAvailable(DEFAULT_MODEL_URL))) {
-        statusEl.textContent = 'Waiting for GLB URL from Flutter…';
+        statusEl.textContent = 'Waiting for GLB URL from Flutterâ€¦';
         return;
       }
-      statusEl.textContent = 'Loading model…';
+      statusEl.textContent = 'Loading modelâ€¦';
       try {
         await loadGlbFromUrl(DEFAULT_MODEL_URL);
         window.sandboxSetClarity?.(true);
@@ -11913,7 +11914,7 @@
         window.sandboxSetFixedCamera?.(true);
         window.sandboxPlayLoopAnim?.();
         wireMorphUi();
-        statusEl.textContent = 'Ready · browser concept viewer';
+        statusEl.textContent = 'Ready Â· browser concept viewer';
       } catch (err) {
         console.error(err);
         statusEl.textContent = `Load failed: ${err?.message || err}`;
