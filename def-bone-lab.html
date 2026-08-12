@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>DEF Bone Scale Lab</title>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "./vendor/three.module.min.js",
+      "BufferGeometryUtils": "./vendor/BufferGeometryUtils.js"
+    }
+  }
+  </script>
+  <style>
+    :root {
+      --bg: #12141a;
+      --panel: #1a1d26;
+      --panel-2: #222632;
+      --line: #33384a;
+      --text: #e8eaf0;
+      --muted: #9aa3b5;
+      --accent: #5b8cff;
+      --ok: #6dcc8a;
+      --warn: #e0b35a;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 13px/1.4 ui-sans-serif, system-ui, sans-serif; overflow: hidden; }
+    #layout { display: grid; grid-template-columns: 340px 1fr 320px; height: 100%; }
+    #left, #right {
+      background: var(--panel);
+      border-right: 1px solid var(--line);
+      display: flex; flex-direction: column; min-height: 0;
+    }
+    #right { border-right: none; border-left: 1px solid var(--line); }
+    #viewport { position: relative; min-width: 0; background: #1a1a1a; }
+    #c { display: block; width: 100%; height: 100%; }
+    header.panel-h {
+      padding: 12px 14px 10px;
+      border-bottom: 1px solid var(--line);
+      flex: 0 0 auto;
+    }
+    header.panel-h h1 { margin: 0 0 4px; font-size: 15px; font-weight: 650; }
+    header.panel-h p { margin: 0; color: var(--muted); font-size: 12px; }
+    .toolbar { display: flex; gap: 6px; padding: 10px 12px; border-bottom: 1px solid var(--line); flex: 0 0 auto; }
+    .toolbar input[type="search"] {
+      flex: 1; min-width: 0; background: var(--panel-2); color: var(--text);
+      border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px;
+    }
+    .toolbar button, .actions button, .axis button {
+      background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+      border-radius: 8px; padding: 8px 10px; cursor: pointer;
+    }
+    .toolbar button.active, .actions button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+    #boneList {
+      flex: 1; overflow: auto; padding: 6px;
+      scrollbar-width: thin;
+    }
+    .bone-item {
+      width: 100%; text-align: left; background: transparent; color: var(--text);
+      border: 1px solid transparent; border-radius: 8px; padding: 8px 10px; cursor: pointer;
+      display: flex; justify-content: space-between; gap: 8px; align-items: baseline;
+    }
+    .bone-item:hover { background: #242836; }
+    .bone-item.selected { background: #2a3550; border-color: #3d5280; }
+    .bone-item .name { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+    .bone-item .tag { color: var(--muted); font-size: 11px; white-space: nowrap; }
+    .bone-item.dirty .tag { color: var(--warn); }
+    #status {
+      position: absolute; left: 10px; bottom: 10px; z-index: 2;
+      background: rgba(0,0,0,0.65); color: #ddd; padding: 8px 10px; border-radius: 8px; font-size: 11px;
+      max-width: min(520px, 90%); pointer-events: none;
+    }
+    #hud {
+      position: absolute; left: 10px; top: 10px; z-index: 2;
+      background: rgba(0,0,0,0.65); color: #ddd; padding: 8px 10px; border-radius: 8px; font-size: 11px;
+      pointer-events: none;
+    }
+    #hud b { color: var(--ok); }
+    .section { padding: 12px 14px; border-bottom: 1px solid var(--line); }
+    .section h2 { margin: 0 0 8px; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .axis { margin-bottom: 12px; }
+    .axis .top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; gap: 8px; }
+    .axis .top span { color: var(--muted); }
+    .axis input[type="range"] { width: 100%; }
+    .actions { display: flex; flex-wrap: wrap; gap: 6px; }
+    .actions button { flex: 1 1 auto; }
+    .note { color: var(--muted); font-size: 12px; }
+    .notes {
+      flex: 1; overflow: auto; padding: 12px 14px; min-height: 0;
+    }
+    .notes textarea {
+      width: 100%; min-height: 180px; resize: vertical;
+      background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+      border-radius: 8px; padding: 10px; font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+    .pill {
+      display: inline-block; padding: 2px 8px; border-radius: 999px;
+      background: #2a3144; color: #c5d0ea; font-size: 11px; margin-right: 4px;
+    }
+    a.link { color: var(--accent); text-decoration: none; }
+    a.link:hover { text-decoration: underline; }
+    @media (max-width: 1100px) {
+      #layout { grid-template-columns: 280px 1fr; }
+      #right { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div id="layout">
+    <aside id="left">
+      <header class="panel-h">
+        <h1>DEF Bone Scale Lab</h1>
+        <p>No animation. Survey DEF bones for future CTRL overlays. <a class="link" href="./index.html">← main viewer</a></p>
+      </header>
+      <div class="toolbar">
+        <input id="search" type="search" placeholder="Filter DEF bones…" />
+        <button type="button" id="btnFace" title="Frame face">Face</button>
+        <button type="button" id="btnBody" title="Frame body">Body</button>
+        <button type="button" id="btnClay" class="active" title="Normals shading for visibility">Normals</button>
+      </div>
+      <div class="toolbar" style="padding-top:0; border-bottom:1px solid var(--line);">
+        <button type="button" id="btnOnlyDirty">Changed only</button>
+        <button type="button" id="btnResetAll">Reset all</button>
+        <button type="button" id="btnExport">Copy notes JSON</button>
+      </div>
+      <div id="boneList"></div>
+    </aside>
+
+    <main id="viewport">
+      <canvas id="c"></canvas>
+      <div id="hud">Loading…</div>
+      <div id="status">Starting…</div>
+    </main>
+
+    <aside id="right">
+      <header class="panel-h">
+        <h1 id="selTitle">No bone selected</h1>
+        <p id="selMeta">Pick a DEF bone from the list</p>
+      </header>
+      <div class="section">
+        <h2>Local scale (−1…1 → ×0.5…1.5)</h2>
+        <div class="axis">
+          <div class="top"><label for="sx">Scale X</label><span id="sxVal">0.00 → ×1.000</span></div>
+          <input id="sx" type="range" min="-1" max="1" step="0.01" value="0" disabled />
+        </div>
+        <div class="axis">
+          <div class="top"><label for="sy">Scale Y</label><span id="syVal">0.00 → ×1.000</span></div>
+          <input id="sy" type="range" min="-1" max="1" step="0.01" value="0" disabled />
+        </div>
+        <div class="axis">
+          <div class="top"><label for="sz">Scale Z</label><span id="szVal">0.00 → ×1.000</span></div>
+          <input id="sz" type="range" min="-1" max="1" step="0.01" value="0" disabled />
+        </div>
+        <div class="actions">
+          <button type="button" id="btnZero">Zero</button>
+          <button type="button" id="btnUniformNeg">−0.5 all</button>
+          <button type="button" id="btnUniformPos">+0.5 all</button>
+        </div>
+      </div>
+      <div class="section">
+        <h2>Mark for CTRL</h2>
+        <div class="actions">
+          <button type="button" id="btnMark">Mark candidate</button>
+          <button type="button" id="btnUnmark">Unmark</button>
+        </div>
+        <p class="note" style="margin:8px 0 0;">Use this while scrubbing to build your keep-list.</p>
+      </div>
+      <div class="notes">
+        <h2 style="margin:0 0 8px; font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:0.04em;">Candidates / notes</h2>
+        <div id="marks" style="margin-bottom:8px;"></div>
+        <textarea id="notes" placeholder="Write notes while testing…&#10;Example: DEF-lid.B.R.003 — good corner control on Y"></textarea>
+      </div>
+    </aside>
+  </div>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { GLTFLoader } from './vendor/GLTFLoader.js';
+    import { OrbitControls } from './vendor/OrbitControls.js';
+
+    const MODEL_URL = '/models/def_bone_lab.glb';
+    const SCALE_AMP = 0.5; // −1..1 → ×0.5..1.5
+
+    const canvas = document.getElementById('c');
+    const hudEl = document.getElementById('hud');
+    const statusEl = document.getElementById('status');
+    const boneListEl = document.getElementById('boneList');
+    const searchEl = document.getElementById('search');
+    const selTitle = document.getElementById('selTitle');
+    const selMeta = document.getElementById('selMeta');
+    const sx = document.getElementById('sx');
+    const sy = document.getElementById('sy');
+    const sz = document.getElementById('sz');
+    const sxVal = document.getElementById('sxVal');
+    const syVal = document.getElementById('syVal');
+    const szVal = document.getElementById('szVal');
+    const marksEl = document.getElementById('marks');
+    const notesEl = document.getElementById('notes');
+
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.setSize(canvas.clientWidth || innerWidth, canvas.clientHeight || innerHeight, false);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xb0b6c0);
+    const camera = new THREE.PerspectiveCamera(35, 1, 0.05, 100);
+    camera.position.set(0, 1.05, 4.6);
+    const controls = new OrbitControls(camera, canvas);
+    controls.target.set(0, 0.85, 0);
+    controls.enableDamping = true;
+
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x8a909a, 0.85));
+    scene.add(new THREE.AmbientLight(0xffffff, 0.45));
+    const key = new THREE.DirectionalLight(0xffffff, 1.15);
+    key.position.set(2.5, 4, 3);
+    scene.add(key);
+    const fill = new THREE.DirectionalLight(0xffffff, 0.65);
+    fill.position.set(-2.5, 2, -1);
+    scene.add(fill);
+    const rim = new THREE.DirectionalLight(0xffffff, 0.5);
+    rim.position.set(0, 2.5, -3);
+    scene.add(rim);
+    const faceFill = new THREE.DirectionalLight(0xffffff, 0.55);
+    faceFill.position.set(0, 1.6, 2.8);
+    scene.add(faceFill);
+
+    const wall = new THREE.Mesh(
+      new THREE.PlaneGeometry(6, 4),
+      new THREE.MeshBasicMaterial({ color: 0xc5cad3 }),
+    );
+    wall.position.set(0, 1.4, -1.15);
+    scene.add(wall);
+
+    let glbRoot = null;
+    /** @type {{ name: string, object: THREE.Object3D, rest: {x:number,y:number,z:number} }[]} */
+    let defBones = [];
+    /** name -> {x,y,z} slider −1..1 */
+    const values = new Map();
+    /** set of marked bone names */
+    const marked = new Set();
+    let selected = null;
+    let filter = '';
+    let onlyDirty = false;
+    let clayMode = true;
+    /** mesh.uuid -> original material(s) */
+    const matBackup = new Map();
+    const colorAttrBackup = new Map();
+
+    function mulFromSlider(v) {
+      return 1 + SCALE_AMP * Math.max(-1, Math.min(1, +v || 0));
+    }
+
+    function fmtAxis(v) {
+      return `${(+v).toFixed(2)} → ×${mulFromSlider(v).toFixed(3)}`;
+    }
+
+    function isDefBoneName(name) {
+      return /^DEF[-_]/i.test(String(name || ''));
+    }
+
+    function getVals(name) {
+      if (!values.has(name)) values.set(name, { x: 0, y: 0, z: 0 });
+      return values.get(name);
+    }
+
+    function isDirty(name) {
+      const v = getVals(name);
+      return Math.abs(v.x) > 1e-6 || Math.abs(v.y) > 1e-6 || Math.abs(v.z) > 1e-6;
+    }
+
+    function applyBoneScale(entry) {
+      const v = getVals(entry.name);
+      entry.object.scale.set(
+        entry.rest.x * mulFromSlider(v.x),
+        entry.rest.y * mulFromSlider(v.y),
+        entry.rest.z * mulFromSlider(v.z),
+      );
+    }
+
+    function applyAll() {
+      for (const b of defBones) applyBoneScale(b);
+    }
+
+    function backupMaterials(root) {
+      matBackup.clear();
+      colorAttrBackup.clear();
+      root.traverse((o) => {
+        if (!o.isMesh || !o.material) return;
+        matBackup.set(o.uuid, Array.isArray(o.material) ? o.material.slice() : o.material);
+        const g = o.geometry;
+        if (!g) return;
+        const bak = {};
+        for (const key of ['color', 'color_1', 'color_2']) {
+          if (g.hasAttribute(key)) bak[key] = g.getAttribute(key);
+        }
+        if (Object.keys(bak).length) colorAttrBackup.set(o.uuid, bak);
+      });
+    }
+
+    function restoreMaterials() {
+      if (!glbRoot) return;
+      glbRoot.traverse((o) => {
+        if (!o.isMesh) return;
+        const bak = matBackup.get(o.uuid);
+        if (bak) o.material = bak;
+        const cols = colorAttrBackup.get(o.uuid);
+        if (cols && o.geometry) {
+          for (const [key, attr] of Object.entries(cols)) {
+            o.geometry.setAttribute(key, attr);
+          }
+        }
+      });
+    }
+
+    /** High-visibility clay look — this GLB has no textures, only dark vertex colors on eyes. */
+    function makeClayMaterial() {
+      // Normals shading: cavities stay visible, bone scale changes read clearly.
+      return new THREE.MeshNormalMaterial({
+        side: THREE.DoubleSide,
+      });
+    }
+
+    function applyClayMaterials() {
+      if (!glbRoot) return;
+      glbRoot.traverse((o) => {
+        if (!o.isMesh && !o.isSkinnedMesh) return;
+        // Vertex COLOR_* paints eyes nearly black and can override material color.
+        if (o.geometry) {
+          for (const key of ['color', 'color_1', 'color_2']) {
+            if (o.geometry.hasAttribute(key)) o.geometry.deleteAttribute(key);
+          }
+        }
+        if (Array.isArray(o.material)) {
+          o.material = o.material.map(() => makeClayMaterial());
+        } else {
+          o.material = makeClayMaterial();
+        }
+        o.frustumCulled = false;
+      });
+    }
+
+    function setClayMode(on) {
+      clayMode = !!on;
+      document.getElementById('btnClay')?.classList.toggle('active', clayMode);
+      if (!glbRoot) return;
+      if (clayMode) applyClayMaterials();
+      else restoreMaterials();
+    }
+
+    function resize() {
+      const w = canvas.clientWidth || canvas.parentElement.clientWidth;
+      const h = canvas.clientHeight || canvas.parentElement.clientHeight;
+      camera.aspect = w / Math.max(1, h);
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h, false);
+    }
+
+    function frameObject(mode) {
+      if (!glbRoot) return;
+      glbRoot.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(glbRoot);
+      if (box.isEmpty()) return;
+      const size = box.getSize(new THREE.Vector3());
+      const center = box.getCenter(new THREE.Vector3());
+      if (mode === 'face') {
+        const eyeY = box.min.y + size.y * 0.82;
+        const dist = Math.max(size.y * 0.55, 0.9);
+        camera.position.set(center.x, eyeY, center.z + dist);
+        controls.target.set(center.x, eyeY - 0.02, center.z);
+      } else {
+        const dist = Math.max(size.y * 2.2, size.z * 2.2, 3.2);
+        camera.position.set(center.x, box.min.y + size.y * 0.55, center.z + dist);
+        controls.target.set(center.x, box.min.y + size.y * 0.45, center.z);
+      }
+      camera.lookAt(controls.target);
+      camera.updateProjectionMatrix();
+    }
+
+    function renderMarks() {
+      marksEl.innerHTML = '';
+      if (!marked.size) {
+        marksEl.innerHTML = '<span class="note">No candidates marked yet.</span>';
+        return;
+      }
+      for (const name of [...marked].sort((a, b) => a.localeCompare(b))) {
+        const span = document.createElement('span');
+        span.className = 'pill';
+        span.textContent = name;
+        marksEl.appendChild(span);
+      }
+    }
+
+    function renderList() {
+      const q = filter.trim().toLowerCase();
+      boneListEl.innerHTML = '';
+      let shown = 0;
+      for (const b of defBones) {
+        if (q && !b.name.toLowerCase().includes(q)) continue;
+        if (onlyDirty && !isDirty(b.name) && !marked.has(b.name)) continue;
+        shown += 1;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'bone-item'
+          + (selected?.name === b.name ? ' selected' : '')
+          + (isDirty(b.name) ? ' dirty' : '');
+        const left = document.createElement('div');
+        left.className = 'name';
+        left.textContent = b.name;
+        const right = document.createElement('div');
+        right.className = 'tag';
+        const bits = [];
+        if (marked.has(b.name)) bits.push('CTRL?');
+        if (isDirty(b.name)) {
+          const v = getVals(b.name);
+          bits.push(`x${v.x.toFixed(1)} y${v.y.toFixed(1)} z${v.z.toFixed(1)}`);
+        }
+        right.textContent = bits.join(' · ') || 'rest';
+        btn.append(left, right);
+        btn.addEventListener('click', () => selectBone(b.name));
+        boneListEl.appendChild(btn);
+      }
+      hudEl.innerHTML = `DEF bones: <b>${defBones.length}</b> · shown <b>${shown}</b> · marked <b>${marked.size}</b> · <b>anim off</b>`;
+    }
+
+    function syncSliders() {
+      const enabled = !!selected;
+      for (const el of [sx, sy, sz]) el.disabled = !enabled;
+      if (!selected) {
+        sx.value = sy.value = sz.value = '0';
+        sxVal.textContent = fmtAxis(0);
+        syVal.textContent = fmtAxis(0);
+        szVal.textContent = fmtAxis(0);
+        return;
+      }
+      const v = getVals(selected.name);
+      sx.value = String(v.x);
+      sy.value = String(v.y);
+      sz.value = String(v.z);
+      sxVal.textContent = fmtAxis(v.x);
+      syVal.textContent = fmtAxis(v.y);
+      szVal.textContent = fmtAxis(v.z);
+    }
+
+    function selectBone(name) {
+      selected = defBones.find((b) => b.name === name) || null;
+      if (!selected) {
+        selTitle.textContent = 'No bone selected';
+        selMeta.textContent = 'Pick a DEF bone from the list';
+      } else {
+        selTitle.textContent = selected.name;
+        const r = selected.rest;
+        selMeta.textContent = `Rest scale (${r.x.toFixed(3)}, ${r.y.toFixed(3)}, ${r.z.toFixed(3)}) · local axes`;
+      }
+      syncSliders();
+      renderList();
+      renderMarks();
+    }
+
+    function onAxisInput(axis, el, labelEl) {
+      if (!selected) return;
+      const v = getVals(selected.name);
+      v[axis] = +el.value;
+      labelEl.textContent = fmtAxis(v[axis]);
+      applyBoneScale(selected);
+      renderList();
+    }
+
+    sx.addEventListener('input', () => onAxisInput('x', sx, sxVal));
+    sy.addEventListener('input', () => onAxisInput('y', sy, syVal));
+    sz.addEventListener('input', () => onAxisInput('z', sz, szVal));
+
+    searchEl.addEventListener('input', () => {
+      filter = searchEl.value;
+      renderList();
+    });
+
+    document.getElementById('btnOnlyDirty').addEventListener('click', (e) => {
+      onlyDirty = !onlyDirty;
+      e.currentTarget.classList.toggle('active', onlyDirty);
+      renderList();
+    });
+
+    document.getElementById('btnResetAll').addEventListener('click', () => {
+      for (const b of defBones) values.set(b.name, { x: 0, y: 0, z: 0 });
+      applyAll();
+      syncSliders();
+      renderList();
+      statusEl.textContent = 'Reset all DEF scales to rest';
+    });
+
+    document.getElementById('btnZero').addEventListener('click', () => {
+      if (!selected) return;
+      values.set(selected.name, { x: 0, y: 0, z: 0 });
+      applyBoneScale(selected);
+      syncSliders();
+      renderList();
+    });
+
+    document.getElementById('btnUniformNeg').addEventListener('click', () => {
+      if (!selected) return;
+      values.set(selected.name, { x: -0.5, y: -0.5, z: -0.5 });
+      applyBoneScale(selected);
+      syncSliders();
+      renderList();
+    });
+
+    document.getElementById('btnUniformPos').addEventListener('click', () => {
+      if (!selected) return;
+      values.set(selected.name, { x: 0.5, y: 0.5, z: 0.5 });
+      applyBoneScale(selected);
+      syncSliders();
+      renderList();
+    });
+
+    document.getElementById('btnMark').addEventListener('click', () => {
+      if (!selected) return;
+      marked.add(selected.name);
+      renderMarks();
+      renderList();
+      statusEl.textContent = `Marked ${selected.name}`;
+    });
+
+    document.getElementById('btnUnmark').addEventListener('click', () => {
+      if (!selected) return;
+      marked.delete(selected.name);
+      renderMarks();
+      renderList();
+    });
+
+    document.getElementById('btnExport').addEventListener('click', async () => {
+      const payload = {
+        generatedAt: new Date().toISOString(),
+        model: 'height_overlay_clean.glb',
+        scaleAmp: SCALE_AMP,
+        marked: [...marked].sort((a, b) => a.localeCompare(b)),
+        dirty: defBones
+          .filter((b) => isDirty(b.name))
+          .map((b) => ({ name: b.name, ...getVals(b.name) })),
+        notes: notesEl.value,
+      };
+      const text = JSON.stringify(payload, null, 2);
+      try {
+        await navigator.clipboard.writeText(text);
+        statusEl.textContent = 'Copied candidates JSON to clipboard';
+      } catch {
+        notesEl.value = `${notesEl.value}\n\n----- EXPORT -----\n${text}`;
+        statusEl.textContent = 'Clipboard blocked — appended export into notes';
+      }
+    });
+
+    document.getElementById('btnFace').addEventListener('click', () => frameObject('face'));
+    document.getElementById('btnBody').addEventListener('click', () => frameObject('body'));
+    document.getElementById('btnClay').addEventListener('click', () => {
+      setClayMode(!clayMode);
+      statusEl.textContent = clayMode
+        ? 'Clay shading on (better for seeing lid/eye deform)'
+        : 'Original vertex colors (eyes may look black — no textures in this GLB)';
+    });
+
+    async function load() {
+      statusEl.textContent = 'Fetching GLB…';
+      hudEl.textContent = 'Fetching model…';
+
+      const res = await fetch(MODEL_URL, { cache: 'no-store' });
+      if (!res.ok) throw new Error(`HTTP ${res.status} for ${MODEL_URL}`);
+      const total = Number(res.headers.get('Content-Length')) || 0;
+      const reader = res.body?.getReader?.();
+      let loaded = 0;
+      let buffer;
+      if (reader) {
+        const chunks = [];
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          chunks.push(value);
+          loaded += value.byteLength;
+          if (total) {
+            const pct = Math.min(100, Math.round((100 * loaded) / total));
+            statusEl.textContent = `Downloading… ${pct}% (${(loaded / 1e6).toFixed(1)} / ${(total / 1e6).toFixed(1)} MB)`;
+            hudEl.textContent = `Downloading ${pct}%`;
+          } else {
+            statusEl.textContent = `Downloading… ${(loaded / 1e6).toFixed(1)} MB`;
+          }
+        }
+        const merged = new Uint8Array(loaded);
+        let offset = 0;
+        for (const c of chunks) {
+          merged.set(c, offset);
+          offset += c.byteLength;
+        }
+        buffer = merged.buffer;
+      } else {
+        buffer = await res.arrayBuffer();
+      }
+
+      statusEl.textContent = 'Parsing GLB (may take a few seconds)…';
+      hudEl.textContent = 'Parsing model…';
+      // Yield so the status text can paint before sync parse blocks the main thread.
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+      const loader = new GLTFLoader();
+      const gltf = await new Promise((resolve, reject) => {
+        loader.parse(buffer, MODEL_URL.replace(/[^/]+$/, ''), resolve, reject);
+      });
+
+      // Intentionally do NOT create AnimationMixer / play clips.
+      if (glbRoot) scene.remove(glbRoot);
+      glbRoot = gltf.scene;
+      scene.add(glbRoot);
+      backupMaterials(glbRoot);
+      if (clayMode) applyClayMaterials();
+      window.__labRoot = glbRoot;
+      window.__labMeshes = [];
+      glbRoot.traverse((o) => {
+        if (o.isMesh || o.isSkinnedMesh) {
+          window.__labMeshes.push({
+            name: o.name,
+            type: o.type,
+            mats: (Array.isArray(o.material) ? o.material : [o.material]).map((m) => ({
+              type: m?.type,
+              color: m?.color?.getHexString?.(),
+              vertexColors: !!m?.vertexColors,
+            })),
+          });
+        }
+      });
+
+      statusEl.textContent = 'Building DEF bone list…';
+      defBones = [];
+      values.clear();
+      glbRoot.traverse((o) => {
+        if (!o?.name || !isDefBoneName(o.name)) return;
+        defBones.push({
+          name: o.name,
+          object: o,
+          rest: { x: o.scale.x, y: o.scale.y, z: o.scale.z },
+        });
+      });
+      defBones.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+      const seen = new Set();
+      defBones = defBones.filter((b) => {
+        if (seen.has(b.name)) return false;
+        seen.add(b.name);
+        return true;
+      });
+
+      const clipNames = (gltf.animations || []).map((a) => a.name).join(', ') || 'none';
+      statusEl.textContent = `Loaded · DEF×${defBones.length} · clips present but not played (${clipNames})`;
+      renderList();
+      renderMarks();
+      resize();
+      frameObject('face');
+      if (defBones.length) {
+        const prefer = defBones.find((b) => /lid\.B\.R\.003/i.test(b.name)) || defBones[0];
+        selectBone(prefer.name);
+      }
+    }
+
+    addEventListener('resize', resize);
+    (function frame() {
+      requestAnimationFrame(frame);
+      controls.update();
+      renderer.render(scene, camera);
+    })();
+
+    resize();
+    load().catch((err) => {
+      console.error(err);
+      statusEl.textContent = `Load failed: ${err?.message || err}`;
+      hudEl.textContent = 'Load failed';
+    });
+  </script>
+</body>
+</html>

@@ -6,7 +6,7 @@ Browser morph / proportion concept viewer (no Flutter required).
 
 **https://albinzeka.github.io/tempwebviewconcept/**
 
-If that 404s, enable Pages once: **Settings → Pages → Branch `main` → folder `/ (root)` → Save**.
+If that 404s, enable Pages once: **Settings -> Pages -> Branch `main` -> folder `/ (root)` -> Save**.
 
 ## Files
 
@@ -14,5 +14,7 @@ If that 404s, enable Pages once: **Settings → Pages → Branch `main` → fold
 |---|---|
 | `index.html` | Viewer + morph UI |
 | `models/height_overlay_clean.glb` | Character |
-| `textures/` | Body, head, brows, iris, pupil, shine |
 | `vendor/` | Three.js |
+| `SLIDER_RECIPES.md` | Bone / shapekey recipes + randomizer rules |
+
+UI labels show only `(Bn)` / `(Sk)`. What's new is in the viewer panel.
