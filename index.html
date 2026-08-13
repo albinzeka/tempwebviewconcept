@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-  <title>Additional bone CTRL project</title>
+  <title>VitalQuest character viewer</title>
   <script type="importmap">
   {
     "imports": {
@@ -44,10 +44,12 @@
     body.clarity #legend.visible { display: block; }
     #morphPanel {
       display: none;
+      flex-direction: column;
       position: absolute; right: 10px; bottom: 10px; z-index: 6;
-      width: min(360px, calc(100vw - 20px));
-      max-height: min(52vh, 420px);
-      overflow: auto;
+      width: min(252px, calc(100vw - 20px));
+      height: var(--panel-h, auto);
+      max-height: calc(100vh - 20px);
+      overflow: hidden;
       background: rgba(18, 20, 26, 0.94);
       color: #e8e8ee;
       border-radius: 10px;
@@ -56,11 +58,61 @@
       box-shadow: 0 8px 28px rgba(0,0,0,0.45);
       pointer-events: auto;
     }
-    #morphPanel.visible { display: block; }
-    #morphPanel h1 {
-      margin: 0 0 8px; font-size: 14px; font-weight: 650; letter-spacing: 0.02em;
+    #morphPanel.visible { display: flex; }
+    #morphPanel .panel-header { flex: 0 0 auto; margin-bottom: 8px; padding-right: 28px; }
+    #texHint {
+      position: absolute; top: 8px; right: 8px; z-index: 7;
+      width: auto;
     }
-    #morphPanel .row { margin-bottom: 8px; }
+    #morphPanel #texHintBtn {
+      display: none;
+      width: 22px; height: 22px; padding: 0;
+      border-radius: 50%;
+      font-size: 13px; font-weight: 700; line-height: 1;
+      box-shadow: 0 0 0 1.5px rgba(255, 208, 64, 0.28);
+    }
+    #morphPanel.tex-preview #texHintBtn { display: block; animation: texhintpulse 2.8s ease-in-out infinite; }
+    @keyframes texhintpulse {
+      0%, 100% {
+        opacity: 0.28;
+        box-shadow: 0 0 0 1.5px rgba(255, 208, 64, 0.12);
+      }
+      50% {
+        opacity: 1;
+        box-shadow: 0 0 0 2px rgba(255, 208, 64, 0.8);
+      }
+    }
+    #texHintPop {
+      position: absolute; top: 28px; right: 0;
+      width: 210px;
+      padding: 10px;
+      background: #1c1e26;
+      border: 1px solid #3a3d48;
+      border-radius: 8px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+      color: #cfd2da;
+      font-size: 11px;
+      line-height: 1.4;
+    }
+    #texHintPop[hidden] { display: none; }
+    #texHintPop p { margin: 0 0 8px; }
+    #texHintPop p:last-of-type { margin-bottom: 10px; }
+    #morphPanel #texHintYes {
+      width: auto;
+      padding: 6px 16px;
+      font-size: 11px;
+      font-weight: 650;
+    }
+    #morphPanel .panel-body {
+      flex: 1 1 auto;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      overflow: hidden;
+    }
+    #morphPanel .panel-footer { flex: 0 0 auto; }
+    #morphPanel .row { margin-bottom: 0; }
     #morphPanel label {
       display: block; color: #9aa; font-size: 10px; text-transform: uppercase;
       letter-spacing: 0.04em; margin-bottom: 3px;
@@ -69,13 +121,236 @@
       width: 100%; box-sizing: border-box;
       background: #24262f; color: #cfd2da; border: 1px solid #3a3d48;
       border-radius: 6px; padding: 6px 8px; font-size: 12px;
+      cursor: pointer;
     }
-    #morphPanel .btns { display: flex; flex-wrap: wrap; gap: 6px; }
-    #morphPanel .btns button { width: auto; flex: 1 1 auto; cursor: pointer; }
-    #morphPanel .btns button.active { background: #3d6df0; border-color: #3d6df0; color: #fff; }
-    #morphPanel input[type="range"] { width: 100%; }
-    #morphPanel .val { color: #cfd2da; font-variant-numeric: tabular-nums; margin-top: 2px; }
-    #morphPanel .hint { color: #888; font-size: 11px; margin-top: 2px; }
+    #morphPanel button.active { background: #3d6df0; border-color: #3d6df0; color: #fff; }
+    #morphPanel .choiceCycle {
+      display: flex; align-items: center; gap: 6px;
+    }
+    #morphPanel .choiceCycle select { flex: 1 1 auto; min-width: 0; }
+    #morphPanel .choiceCycle button {
+      flex: 0 0 auto; width: 34px; padding: 6px 0;
+    }
+    #morphPanel .choiceCycle button:hover { border-color: #5a7df0; color: #fff; }
+    #morphPanel .cat-cycle select { min-width: 0; width: 100%; }
+    #morphPanel .tile-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 6px;
+    }
+    #tileScrollBox {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-x: hidden;
+      overflow-y: auto;
+      border: 1px solid #3a3d48;
+      border-radius: 6px;
+      padding: 6px;
+      background: rgba(0, 0, 0, 0.12);
+    }
+    #tileScrollBox .tile-grid { margin-bottom: 0; }
+    #morphPanel .mode-toggle {
+      grid-column: span 2;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4px;
+      padding: 3px;
+      border-radius: 6px;
+      background: #1a1c24;
+      border: 1px solid #3a3d48;
+    }
+    #morphPanel .mode-toggle button {
+      padding: 7px 6px;
+      font-size: 11px;
+    }
+    #morphPanel .mode-toggle button.active {
+      background: #3d6df0;
+      border-color: #3d6df0;
+      color: #fff;
+    }
+    #morphPanel .ctrl-tile.span-2 { grid-column: span 2; }
+    #morphPanel .slider-card {
+      grid-column: span 2;
+      background: transparent;
+      border: 0;
+      border-radius: 0;
+      padding: 1px 2px 2px;
+    }
+    #morphPanel .slider-card + .slider-card {
+      border-top: 1px solid #2a2d36;
+    }
+    #morphPanel .slider-card .card-title {
+      font-size: 10px;
+      text-align: left;
+      margin: 0;
+      color: #cfd2da;
+    }
+    #morphPanel .slider-card .slider-row { margin-bottom: 0; gap: 4px; }
+    #morphPanel .slider-card .btn-default {
+      width: 24px; height: 24px; font-size: 13px;
+    }
+    #morphPanel .slider-card .slider-wrap { padding: 0; }
+    #tileScrollBox.dense { padding: 4px 6px; }
+    #tileScrollBox.dense .tile-grid { gap: 6px 6px; }
+    #tileScrollBox.dense .slider-card { padding: 3px 2px 5px; }
+    #tileScrollBox.dense .slider-card + .slider-card { border-top: 1px solid #2a2d36; }
+    #tileScrollBox.dense .slider-card .card-title { font-size: 12px; margin-bottom: 2px; }
+    #tileScrollBox.dense .slider-card .slider-row {
+      grid-template-columns: 26px minmax(0, 1fr);
+      gap: 6px;
+    }
+    #tileScrollBox.dense .slider-card .btn-default { width: 26px; height: 26px; font-size: 13px; }
+    #tileScrollBox.dense .slider-card .slider-wrap { padding: 8px 0; }
+    #tileScrollBox.dense .slider-card .slider-wrap input[type="range"] { height: 26px; }
+    #loadOverlay {
+      position: absolute; inset: 0; z-index: 80;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 14px;
+      color: #e8e8ee;
+      font-size: 13px;
+      letter-spacing: 0.04em;
+      pointer-events: auto;
+    }
+    #loadOverlay.hidden { display: none; }
+    #loadOverlay.boot { background: #1a1a1a; }
+    #loadOverlay.tint { background: rgba(18, 20, 26, 0.62); }
+    #loadOverlay .load-spin {
+      width: 42px; height: 42px;
+      border: 3px solid #3a3d48;
+      border-top-color: #8ab4ff;
+      border-radius: 50%;
+      animation: loadspin 0.75s linear infinite;
+    }
+    @keyframes loadspin { to { transform: rotate(360deg); } }
+    #utilityTiles {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+    }
+    #morphPanel .ctrl-tile,
+    #morphPanel .util-tile {
+      min-height: 38px;
+      padding: 8px 6px;
+      font-size: 11px;
+      line-height: 1.25;
+      text-align: center;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      word-break: break-word;
+    }
+    #morphPanel .util-tile {
+      flex-direction: column;
+      gap: 2px;
+      min-height: 44px;
+      padding: 6px 4px;
+    }
+    #morphPanel .util-tile .util-k {
+      font-size: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: #9aa;
+      line-height: 1.1;
+    }
+    #morphPanel .util-tile .util-v {
+      font-size: 11px;
+      font-weight: 650;
+      line-height: 1.15;
+    }
+    #morphPanel .util-tile.active .util-k { color: #d6e4ff; }
+    #morphPanel .ctrl-tile.active,
+    #morphPanel .util-tile.active { background: #3d6df0; border-color: #3d6df0; color: #fff; }
+    #morphPanel .slider-row {
+      display: grid;
+      grid-template-columns: 38px minmax(0, 1fr);
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 8px;
+      overflow: hidden;
+    }
+    #morphPanel .btn-default {
+      width: 38px; height: 38px; padding: 0;
+      font-size: 16px; line-height: 1;
+    }
+    #morphPanel .slider-wrap {
+      position: relative;
+      padding: 10px 0;
+      overflow: hidden;
+      min-width: 0;
+    }
+    #morphPanel .slider-wrap input[type="range"] {
+      width: 100%;
+      height: 14px;
+      margin: 0;
+      accent-color: #3d6df0;
+      display: block;
+    }
+    #morphPanel .slider-val {
+      position: absolute;
+      top: -2px;
+      left: 0;
+      transform: translateX(-50%);
+      padding: 1px 5px;
+      border-radius: 4px;
+      background: #3d6df0;
+      color: #fff;
+      font-size: 10px;
+      font-variant-numeric: tabular-nums;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.12s;
+      white-space: nowrap;
+      max-width: 90%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    #morphPanel .slider-wrap.dragging .slider-val { opacity: 1; }
+    #morphPanel .cat-placeholder {
+      color: #888; font-size: 11px; line-height: 1.4;
+      padding: 8px 4px; text-align: center;
+    }
+    #morphPanel .panel-footer .tile-grid { margin-bottom: 8px; }
+    #morphPanel .panel-footer .tile-grid:last-child { margin-bottom: 0; }
+    #morphPanel .skinSwatch {
+      display: inline-block; width: 14px; height: 14px; border-radius: 3px;
+      border: 1px solid #555; vertical-align: -2px; margin-right: 6px;
+    }
+    #materialsDash {
+      display: none;
+      max-height: min(52vh, 520px);
+      overflow: auto;
+      margin-bottom: 8px;
+      padding-right: 2px;
+    }
+    #materialsDash.visible { display: block; }
+    #materialsDash .md-section {
+      margin: 0 0 10px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #2e313a;
+    }
+    #materialsDash .md-section:last-child { border-bottom: 0; }
+    #materialsDash .md-title {
+      color: #8ab4ff; font-size: 10px; text-transform: uppercase;
+      letter-spacing: 0.06em; margin: 0 0 6px;
+    }
+    #materialsDash .md-row { margin-bottom: 8px; }
+    #materialsDash .md-row label {
+      display: flex; justify-content: space-between; gap: 8px;
+      color: #cfd2da; font-size: 11px; margin-bottom: 3px;
+    }
+    #materialsDash .md-row label .md-val {
+      color: #888; font-variant-numeric: tabular-nums;
+    }
+    #materialsDash .md-preview {
+      display: flex; align-items: center; gap: 8px;
+      margin-bottom: 8px; color: #888; font-size: 11px;
+    }
+    #materialsDash .md-preview .swatch {
+      width: 28px; height: 28px; border-radius: 6px;
+      border: 1px solid #555; flex: 0 0 auto;
+    }
+    #materialsDash .md-note { color: #777; font-size: 10px; line-height: 1.35; margin: 0 0 6px; }
     #whatsNew {
       position: absolute; right: 10px; top: 10px; z-index: 8;
       display: flex; flex-direction: column; align-items: flex-end;
@@ -131,6 +406,10 @@
   </style>
 </head>
 <body>
+  <div id="loadOverlay" class="boot" aria-live="polite">
+    <div class="load-spin" aria-hidden="true"></div>
+    <div id="loadOverlayText">Loading...</div>
+  </div>
   <div id="hud">Loading...</div>
   <div id="legend"></div>
   <div id="whatsNew">
@@ -139,7 +418,23 @@
       <h2>Recent changes</h2>
       <div class="wn-date">13 Aug 2026</div>
       <ul>
-        <li><strong>Randomizer</strong> - soft gender bias everywhere except breasts (strong female lean); correlated width/thickness; height fixed; head +/-0.12</li>
+        <li><strong>Preview hint</strong> - flashing ? on the panel while low-res browsing is on; optional manual 4k load</li>
+        <li><strong>Load overlay</strong> - boot screen until the viewer is ready; gray tint + spinner while 4k maps bake after leaving a texture category</li>
+        <li><strong>Body color presets</strong> - own category after Body color; makeup/outfit/etc. preview at 512 with overlays (not skin-only)</li>
+        <li><strong>Panel polish</strong> - denser Body color sliders; 512 preview while editing 4k maps (full res on category change); 3-col Lock Camera footer</li>
+        <li><strong>Panel layout v2</strong> - fixed height (Eyes ref), 2-col tiles in scroll box, option tiles for styles/overlays</li>
+        <li><strong>Panel UI</strong> - tile grid controls, grouped Main category, Default + Randomize row, Anim ON/OFF master toggle</li>
+        <li><strong>OKLCH skin perf</strong> - 512px preview while tweaking; full 4096 bake only after ~1.8s idle (not on each slider release)</li>
+        <li><strong>OKLCH skin recipe</strong> - SkinDepth anchors + Warmth/Redness; White albedo drives luminance detail (not RGB multiply); Materials dashboard shows all skin sliders at once</li>
+        <li><strong>Lip tint</strong> - <code>face/main/diffuse/Lip_Mask.png</code> (same head UV) + Lip pink/strength</li>
+        <li><strong>Material picks</strong> - dropdown + ◀▶ cycle (not a slider) for skin base, eyes, brows, makeup, overlays, outfits</li>
+        <li><strong>Materials pack</strong> - skin tones (incl. White + hue), body/face overlays, underwear D/N/R, eye styles, brows (white-key) &amp; makeup (alpha)</li>
+        <li><strong>Mouth / nose randomize</strong> - harder full-range rolls (except upper/lower lip width Bn + nose scale Sk)</li>
+        <li><strong>Mouth / nose ranges</strong> - nose volume ±0.4; nose bridge ±0.3; lip widths 0…0.3; lips forward 0…1.3; removed Nose tilt + Lip Bulge</li>
+        <li><strong>Orbit pivot</strong> - camera orbits torso/head bones (not full DEF bbox), so the centre is no longer in front of the mesh</li>
+        <li><strong>Randomizer gender floors</strong> - near-full female/male expression enforces hip/chest/breast/glute (and male face/shoulder/muscle) mins/maxes after Randomize</li>
+        <li><strong>Blink</strong> - procedural <code>anim_blink</code> shapekey overlay (0 open / 1 closed); no eyelid Action</li>
+        <li><strong>Randomizer</strong> - softer faces (±0.32 Sk / ±0.35 Bn); unipolar 0...1 keys usually 0...0.10 (rare to 0.70); breasts stay strong female lean</li>
         <li><strong>Breast / butt roundness (Sk)</strong> - renamed; after bone breast/glute sliders; clamped -0.2...0.2 / -0.4...0.4</li>
         <li><strong>Torso size (Sk)</strong> - slider clamped to -0.2...0.2 (full Large/Skinny Torso keys)</li>
         <li><strong>Labels</strong> - sliders show only <strong>(Bn)</strong> bone/CTRL or <strong>(Sk)</strong> shapekey; Big/Small tags removed from the UI</li>
@@ -172,32 +467,47 @@
   <div id="callouts"></div>
   <div id="status"></div>
   <div id="morphPanel">
-    <h1>Additional bone CTRL</h1>
-    <div class="row">
-      <label for="catSelect">Category</label>
-      <select id="catSelect"></select>
+    <div id="texHint">
+      <button type="button" id="texHintBtn" aria-label="Texture quality help" aria-expanded="false">?</button>
+      <div id="texHintPop" hidden>
+        <p>Low resolution textures are active during browsing. 4k textures apply automatically when you change category.</p>
+        <p>Manually force 4k load?</p>
+        <button type="button" id="texHintYes">YES</button>
+      </div>
     </div>
-    <div class="row" id="ctrlSelectRow">
-      <label for="ctrlSelect">Control</label>
-      <select id="ctrlSelect"></select>
+    <div class="panel-header">
+      <div class="row">
+        <label for="catSelect">Main category</label>
+        <div class="choiceCycle cat-cycle">
+          <button type="button" id="catPrev" aria-label="Previous category">◀</button>
+          <select id="catSelect"></select>
+          <button type="button" id="catNext" aria-label="Next category">▶</button>
+        </div>
+      </div>
     </div>
-    <div class="row">
-      <div class="val" id="ctrlValue">-</div>
-      <div class="hint" id="ctrlHint"></div>
-      <input id="ctrlSlider" type="range" min="-1" max="1" step="0.01" value="0" disabled />
+    <div class="panel-body">
+      <div id="tileScrollBox">
+        <div id="ctrlTileGrid" class="tile-grid" aria-label="Controls"></div>
+      </div>
+      <div id="catPlaceholder" class="cat-placeholder" style="display:none"></div>
     </div>
-    <div class="row btns">
-      <button type="button" id="btnMin">Min</button>
-      <button type="button" id="btnMid">Mid</button>
-      <button type="button" id="btnMax">Max</button>
-    </div>
-    <div class="row btns" id="randomizeRow">
-      <button type="button" id="btnRandomize">Randomize</button>
-    </div>
-    <div class="row btns">
-      <button type="button" id="btnAnim">Anim: Idle</button>
-      <button type="button" id="btnCam">Camera: Body</button>
-      <button type="button" id="btnOrbit">Orbit: Off</button>
+    <div class="panel-footer">
+      <div class="slider-row" id="sliderRow" style="display:none">
+        <button type="button" id="btnDefault" class="btn-default" title="Restore default" aria-label="Restore default">↺</button>
+        <div class="slider-wrap" id="sliderWrap">
+          <input id="ctrlSlider" type="range" min="-1" max="1" step="0.01" value="0" />
+          <div id="sliderValueBubble" class="slider-val"></div>
+        </div>
+      </div>
+      <div class="tile-grid" id="randomizerRow" style="display:none">
+        <button type="button" id="btnDefaultAll" class="util-tile">Default</button>
+        <button type="button" id="btnRandomize" class="util-tile">Randomize</button>
+      </div>
+      <div id="utilityTiles">
+        <button type="button" id="btnAnim" class="util-tile active"><span class="util-k">Animation</span><span class="util-v">ON</span></button>
+        <button type="button" id="btnCam" class="util-tile"><span class="util-k">Camera</span><span class="util-v">Body</span></button>
+        <button type="button" id="btnOrbit" class="util-tile active"><span class="util-k">Lock Camera</span><span class="util-v">ON</span></button>
+      </div>
     </div>
   </div>
   <canvas id="c"></canvas>
@@ -227,7 +537,7 @@
     renderer.outputColorSpace = THREE.SRGBColorSpace;
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x2a2a2a);
+    scene.background = new THREE.Color(0x1a1a1a);
 
     const camera = new THREE.PerspectiveCamera(35, innerWidth / innerHeight, 0.05, 100);
     // Full-body framing for ~1.6-1.8m standing character (was too low -> legs-only shots).
@@ -251,6 +561,7 @@
     scene.add(rim);
 
     const gridFloor = new THREE.GridHelper(4, 40, 0x666666, 0x3a3a3a);
+    gridFloor.visible = false;
     scene.add(gridFloor);
 
     function makeChecker(size = 512, cells = 16, a = '#4a4a4a', b = '#2e2e2e') {
@@ -275,9 +586,11 @@
       new THREE.MeshBasicMaterial({ map: makeChecker() }),
     );
     wall.position.set(0, 1.5, -1.2);
+    wall.visible = false;
     scene.add(wall);
 
     const rulerGroup = new THREE.Group();
+    rulerGroup.visible = false;
     scene.add(rulerGroup);
     function rebuildRulers(maxY = 2.0, step = 0.1) {
       while (rulerGroup.children.length) {
@@ -431,12 +744,15 @@
       eyeDistance: {
         id: 'eyeDistance',
         label: 'Eye distance',
-        mode: 'scl',
+        // L/R sit at ~±0.033 local X under CTRL-DEF-eye_master — move them apart/together.
+        mode: 'pos',
         axis: 'x',
-        amp: 0.002,
+        amp: 0.012,
+        sliderMin: -0.2,
+        sliderMax: 0.3,
         targets: [
-          { bone: 'CTRL-eye_master.L', sign: -1 },
-          { bone: 'CTRL-eye_master.R', sign: 1 },
+          { bone: 'CTRL-eye_master.L', sign: 1 },
+          { bone: 'CTRL-eye_master.R', sign: -1 },
         ],
       },
       eyeMasterSclX: {
@@ -463,7 +779,7 @@
       },
       lidRootSclZ: {
         id: 'lidRootSclZ',
-        label: 'Lid root scale Z',
+        label: 'Eyelid size vertical',
         mode: 'scl',
         axis: 'z',
         amp: 0.1,
@@ -474,7 +790,7 @@
       },
       lidRootRotY: {
         id: 'lidRootRotY',
-        label: 'Lid root rotate Y',
+        label: 'Eyelid rotation',
         mode: 'rot',
         axis: 'y',
         amp: 0.1,
@@ -485,7 +801,7 @@
       },
       lidBLocZ: {
         id: 'lidBLocZ',
-        label: 'Lid B loc Z',
+        label: 'Inner eyelid height',
         mode: 'pos',
         axis: 'z',
         amp: 0.001,
@@ -496,10 +812,12 @@
       },
       lidB001LocZ: {
         id: 'lidB001LocZ',
-        label: 'Lid B.001 loc Z',
+        label: 'Lower-eyelid inner height',
         mode: 'pos',
         axis: 'z',
         amp: 0.001,
+        sliderMin: -0.30,
+        sliderMax: 0.30,
         targets: [
           { bone: 'CTRL-DEF-lid.B.L.001', sign: 1 },
           { bone: 'CTRL-DEF-lid.B.R.001', sign: 1 },
@@ -507,10 +825,12 @@
       },
       lidB002LocZ: {
         id: 'lidB002LocZ',
-        label: 'Lid B.002 loc Z',
+        label: 'Lower-eyelid height',
         mode: 'pos',
         axis: 'z',
         amp: 0.001,
+        sliderMin: -0.30,
+        sliderMax: 0.30,
         targets: [
           { bone: 'CTRL-DEF-lid.B.L.002', sign: 1 },
           { bone: 'CTRL-DEF-lid.B.R.002', sign: 1 },
@@ -518,7 +838,7 @@
       },
       lidB003LocZ: {
         id: 'lidB003LocZ',
-        label: 'Lid B.003 loc Z',
+        label: 'Lower-eyelid outer height',
         mode: 'pos',
         axis: 'z',
         amp: 0.001,
@@ -529,7 +849,7 @@
       },
       lidTLocZ: {
         id: 'lidTLocZ',
-        label: 'Lid T loc Z',
+        label: 'Outer eyelid height',
         mode: 'pos',
         axis: 'z',
         amp: 0.001,
@@ -540,10 +860,12 @@
       },
       lidT001LocZ: {
         id: 'lidT001LocZ',
-        label: 'Lid T.001 loc Z',
+        label: 'Upper-eyelid outer height',
         mode: 'pos',
         axis: 'z',
         amp: 0.001,
+        sliderMin: 0,
+        sliderMax: 0.30,
         targets: [
           { bone: 'CTRL-DEF-lid.T.L.001', sign: 1 },
           { bone: 'CTRL-DEF-lid.T.R.001', sign: 1 },
@@ -551,7 +873,7 @@
       },
       lidT002LocZ: {
         id: 'lidT002LocZ',
-        label: 'Lid T.002 loc Z',
+        label: 'Upper-eyelid height',
         mode: 'pos',
         axis: 'z',
         amp: 0.001,
@@ -562,7 +884,7 @@
       },
       lidT003LocZ: {
         id: 'lidT003LocZ',
-        label: 'Lid T.003 loc Z',
+        label: 'Upper-eyelid inner height',
         mode: 'pos',
         axis: 'z',
         amp: 0.001,
@@ -633,6 +955,8 @@
         axis: 'z',
         minMul: 0.8,
         maxMul: 1.2,
+        sliderMin: -0.4,
+        sliderMax: 0.4,
         targets: [{ bone: 'CTRL-DEF-nose_master', sign: 1 }],
       },
       noseMasterLocZ: {
@@ -704,6 +1028,8 @@
         axis: 'x',
         minMul: 1.0,
         maxMul: 1.5,
+        sliderMin: 0,
+        sliderMax: 0.3,
         targets: [{ bone: 'CTRL-DEF-lowerlip', sign: 1 }],
       },
       upperLipSclX: {
@@ -713,6 +1039,8 @@
         axis: 'x',
         minMul: 1.0,
         maxMul: 1.5,
+        sliderMin: 0,
+        sliderMax: 0.3,
         targets: [{ bone: 'CTRL-DEF-upperlip', sign: 1 }],
       },
       mouthLocZ: {
@@ -764,7 +1092,9 @@
         mode: 'scl',
         axis: 'y',
         minMul: 1.0,
-        maxMul: 1.2,
+        maxMul: 1.35,
+        sliderMin: 0,
+        sliderMax: 1.3,
         targets: [
           { bone: 'CTRL-DEF-upperlip', sign: 1 },
           { bone: 'CTRL-DEF-lowerlip', sign: 1 },
@@ -826,6 +1156,7 @@
     let morphAnimPreferred = null; // last special anim requested by a tagged control
     const DEFAULT_LOOP_ANIM = 'Idle';
     let moveTestEnabled = false;
+    let animDriversEnabled = true;
 
     function currentLoopAnim() {
       return moveTestEnabled ? 'move test' : DEFAULT_LOOP_ANIM;
@@ -888,12 +1219,42 @@
      *   [Name]1=(Key)                      -> unipolar 0..1
      *   Key_0.5 caps at 0.5; Key_-1 allows negative morph influence
      */
+    const CATEGORY_GROUP_ORDER = [
+      { id: 'ungrouped', label: '' },
+      { id: 'head', label: 'Head' },
+      { id: 'body', label: 'Body' },
+    ];
+    const RANDOMIZE_SKIP_CATS = new Set([
+      'randomizer', 'presets', 'eyeStyle', 'eyebrowsTex', 'makeupTex',
+      'faceOverlay', 'bodyColor', 'bodyColorPresets', 'bodyArt', 'outfit',
+    ]);
+    const TEXTURE_CATEGORY_IDS = new Set([
+      'eyeStyle', 'eyebrowsTex', 'makeupTex', 'faceOverlay',
+      'bodyColor', 'bodyColorPresets', 'bodyArt', 'outfit',
+    ]);
+    /** Choice-only categories: options render as tiles (not a separate Option row). */
+    const OPTION_TILE_CATEGORIES = new Set([
+      'eyeStyle', 'eyebrowsTex', 'faceOverlay', 'makeupTex',
+      'bodyColorPresets', 'bodyArt', 'outfit',
+    ]);
+    /** Bone / shapekey / color sliders listed in the tile box (Body color style). */
+    const INLINE_SLIDER_CATEGORIES = new Set([
+      'headShapes', 'eyes', 'brows', 'jaw', 'mouth', 'nose', 'ears', 'specials',
+      'bodyBones', 'bodyShapes', 'bodyColor',
+    ]);
+    const HIDDEN_CATEGORIES = new Set(['presets']);
+    const CATEGORY_DISPLAY_ORDER = [
+      'randomizer',
+      'headShapes', 'eyes', 'eyeStyle', 'eyebrowsTex', 'brows', 'jaw', 'mouth', 'nose', 'ears',
+      'makeupTex', 'faceOverlay', 'specials',
+      'bodyBones', 'bodyShapes', 'bodyColor', 'bodyColorPresets', 'bodyArt', 'outfit',
+    ];
     const MORPH_CATEGORIES = [
       {
         id: 'randomizer',
         label: 'Randomizer',
+        group: 'ungrouped',
         controls: [
-          // 0 = feminine, 1 = masculine - drives face + body gender shapekeys together
           {
             type: 'genderPair',
             id: 'gender_expression',
@@ -905,8 +1266,15 @@
         ],
       },
       {
+        id: 'presets',
+        label: 'Presets',
+        group: 'ungrouped',
+        controls: [],
+      },
+      {
         id: 'headShapes',
         label: 'Head shapes',
+        group: 'head',
         controls: [
           // 0 = feminine, 1 = masculine; mid start (single morph on base)
           axisCtrl('Gender expression', 'B', 'Face gender expression', null, null, 0.5, 'face_gender_expression'),
@@ -925,6 +1293,7 @@
       {
         id: 'bodyBones',
         label: 'Body bones',
+        group: 'body',
         controls: [
           { type: 'bone', id: 'height', label: 'Height', range: 'B' },
           { type: 'bone', id: 'shoulderWidth', label: 'Shoulder width', range: 'S' },
@@ -942,15 +1311,82 @@
         ],
       },
       {
-        id: 'materials',
-        label: 'Materials',
+        id: 'bodyColor',
+        label: 'Body color',
+        group: 'body',
         controls: [
-          { type: 'iris', id: 'irisHue', label: 'Iris hue', range: 'B' },
+          { type: 'skinParam', id: 'skinDepth', label: 'Skin depth', min: 0, max: 1, defaultValue: 0.28 },
+          { type: 'skinParam', id: 'skinWarmth', label: 'Warmth', min: -1, max: 1, defaultValue: 0 },
+          { type: 'skinParam', id: 'skinRedness', label: 'Redness', min: -1, max: 1, defaultValue: 0 },
+          { type: 'skinParam', id: 'skinSaturation', label: 'Saturation', min: 0, max: 1.5, defaultValue: 1 },
+          { type: 'skinParam', id: 'lipPink', label: 'Lip pink', min: 0, max: 1, defaultValue: 0.55 },
+          { type: 'skinParam', id: 'lipStrength', label: 'Lip strength', min: 0, max: 1, defaultValue: 0.75 },
+        ],
+      },
+      {
+        id: 'bodyColorPresets',
+        label: 'Body color presets',
+        group: 'body',
+        controls: [
+          {
+            type: 'choice',
+            id: 'skinTone',
+            label: 'Body color preset',
+            options: [
+              { value: 'white', label: 'Custom' },
+              { value: 'caucasian', label: 'Caucasian' },
+              { value: 'black', label: 'Black' },
+            ],
+            defaultValue: 'white',
+          },
+        ],
+      },
+      {
+        id: 'bodyArt',
+        label: 'Body Art',
+        group: 'body',
+        controls: [
+          {
+            type: 'choice',
+            id: 'bodyExtra',
+            label: 'Body overlay',
+            options: [
+              { value: 'none', label: 'None' },
+              { value: 'Overlay_Freckles.png', label: 'Freckles' },
+              { value: 'Tattoo_1.png', label: 'Tattoo 1' },
+            ],
+            defaultValue: 'none',
+          },
+        ],
+      },
+      {
+        id: 'outfit',
+        label: 'Outfit',
+        group: 'body',
+        controls: [
+          {
+            type: 'choice',
+            id: 'underwear',
+            label: 'Outfit',
+            options: [
+              { value: 'none', label: 'None' },
+              { value: 'Bikini', label: 'Bikini' },
+              { value: 'Gym Clothes', label: 'Gym Clothes' },
+              { value: 'Gym Clothes Shirt', label: 'Gym Clothes Shirt' },
+              { value: 'Gym Clothes Topless', label: 'Gym Clothes Topless' },
+              { value: 'Lace Bodysuit', label: 'Lace Bodysuit' },
+              { value: 'Superhero', label: 'Superhero' },
+              { value: 'Swimsuit', label: 'Swimsuit' },
+            ],
+            defaultValue: 'none',
+          },
+          { type: 'outfitHue', id: 'underwearHue', label: 'Outfit hue', min: 0, max: 1, defaultValue: 0.5 },
         ],
       },
       {
         id: 'bodyShapes',
         label: 'Body shapes',
+        group: 'body',
         controls: [
           // 0 = feminine, 1 = masculine; mid start (single morph on base)
           axisCtrl('Gender expression', 'B', 'Body gender expression', null, null, 0.5, 'body_gender_expression'),
@@ -967,6 +1403,7 @@
       {
         id: 'eyes',
         label: 'Eyes',
+        group: 'head',
         controls: [
           axisCtrl('Eye size', 'B', 'Big Eyes_0.5', 'Small Eyes_0.3'),
           axisCtrl('Eye monolid', 'S', 'Monolid', null),
@@ -974,21 +1411,63 @@
           { type: 'form', id: 'eyeDistance', label: 'Eye distance', range: 'S' },
           { type: 'form', id: 'eyeMasterSclX', label: 'Eye size horizontal', range: 'S' },
           { type: 'form', id: 'eyeMasterSclZ', label: 'Eye size vertical', range: 'B' },
-          { type: 'form', id: 'lidRootSclZ', label: 'Lid root scale Z', range: 'S' },
-          { type: 'form', id: 'lidRootRotY', label: 'Lid root rotate Y', range: 'S' },
-          { type: 'form', id: 'lidBLocZ', label: 'Lid B loc Z', range: 'S' },
-          { type: 'form', id: 'lidB001LocZ', label: 'Lid B.001 loc Z', range: 'S' },
-          { type: 'form', id: 'lidB002LocZ', label: 'Lid B.002 loc Z', range: 'S' },
-          { type: 'form', id: 'lidB003LocZ', label: 'Lid B.003 loc Z', range: 'S' },
-          { type: 'form', id: 'lidTLocZ', label: 'Lid T loc Z', range: 'S' },
-          { type: 'form', id: 'lidT001LocZ', label: 'Lid T.001 loc Z', range: 'S' },
-          { type: 'form', id: 'lidT002LocZ', label: 'Lid T.002 loc Z', range: 'S' },
-          { type: 'form', id: 'lidT003LocZ', label: 'Lid T.003 loc Z', range: 'S' },
+          { type: 'form', id: 'lidRootSclZ', label: 'Eyelid size vertical', range: 'S' },
+          { type: 'form', id: 'lidRootRotY', label: 'Eyelid rotation', range: 'S' },
+          { type: 'form', id: 'lidBLocZ', label: 'Inner eyelid height', range: 'S' },
+          { type: 'form', id: 'lidB001LocZ', label: 'Lower-eyelid inner height', range: 'S' },
+          { type: 'form', id: 'lidB002LocZ', label: 'Lower-eyelid height', range: 'S' },
+          { type: 'form', id: 'lidB003LocZ', label: 'Lower-eyelid outer height', range: 'S' },
+          { type: 'form', id: 'lidTLocZ', label: 'Outer eyelid height', range: 'S' },
+          { type: 'form', id: 'lidT001LocZ', label: 'Upper-eyelid outer height', range: 'S' },
+          { type: 'form', id: 'lidT002LocZ', label: 'Upper-eyelid height', range: 'S' },
+          { type: 'form', id: 'lidT003LocZ', label: 'Upper-eyelid inner height', range: 'S' },
+        ],
+      },
+      {
+        id: 'eyeStyle',
+        label: 'Eye style',
+        group: 'head',
+        controls: [
+          {
+            type: 'choice',
+            id: 'eyeStyle',
+            label: 'Eye style',
+            options: [
+              { value: 'toon', label: 'Toon' },
+              { value: 'real', label: 'Real' },
+              { value: 'snake', label: 'Snake' },
+            ],
+            defaultValue: 'toon',
+          },
+        ],
+      },
+      {
+        id: 'eyebrowsTex',
+        label: 'Eyebrow style',
+        group: 'head',
+        controls: [
+          {
+            type: 'choice',
+            id: 'eyebrow',
+            label: 'Eyebrows',
+            options: [
+              { value: 'none', label: 'None' },
+              { value: 'EYEBROWS_1.png', label: 'Brows 1' },
+              { value: 'EYEBROWS_2.png', label: 'Brows 2' },
+              { value: 'EYEBROWS_3.png', label: 'Brows 3' },
+              { value: 'EYEBROWS_4.png', label: 'Brows 4' },
+              { value: 'EYEBROWS_5.png', label: 'Brows 5' },
+              { value: 'EYEBROWS_6.png', label: 'Brows 6' },
+              { value: 'EYEBROWS_7.png', label: 'Brows 7' },
+            ],
+            defaultValue: 'EYEBROWS_1.png',
+          },
         ],
       },
       {
         id: 'brows',
-        label: 'Brows',
+        label: 'Eyebrow shapes',
+        group: 'head',
         controls: [
           { type: 'form', id: 'browMasterLocZ', label: 'Eyebrows vertical position', range: 'S' },
           axisCtrl('Brow depth', 'S', 'Brow Forward', 'Brow Back_0.5'),
@@ -1000,6 +1479,7 @@
       {
         id: 'jaw',
         label: 'Jaw',
+        group: 'head',
         controls: [
           { type: 'form', id: 'jawTiltRotX', label: 'Jaw up/down tilt', range: 'S' },
           { type: 'form', id: 'mouthLocZ', label: 'Mouth up/down', range: 'S' },
@@ -1027,6 +1507,7 @@
       {
         id: 'mouth',
         label: 'Mouth',
+        group: 'head',
         controls: [
           { type: 'form', id: 'upperLipSclX', label: 'Upper lip width', range: 'B' },
           { type: 'form', id: 'lowerLipSclX', label: 'Lower lip width', range: 'B' },
@@ -1036,13 +1517,13 @@
           axisCtrl('Mouth corner shape', 'S', 'Mouth Corners Up', 'Mouth Corners Down_0.4'),
           axisCtrl('Upper lip size', 'S', 'Full Top Lip_0.4', 'Thin Top Lip_0.4'),
           axisCtrl('Bottom lip size', 'S', 'Full Bottom Lip_0.2', 'Thin Bottom Lip_0.7'),
-          axisCtrl('Lip Bulge', 'S', 'Top Lip Out_0.4)+(Bottom Lip Out_0.4', null),
           axisCtrl('Cupids Bow shape', 'S', 'Remove Cupids Bow', null),
         ],
       },
       {
         id: 'nose',
         label: 'Nose',
+        group: 'head',
         controls: [
           { type: 'form', id: 'nosebridgeUpSclZ', label: 'Upper nosebridge vertical', range: 'B' },
           { type: 'form', id: 'nosebridgeUpSclX', label: 'Upper nosebridge width', range: 'B' },
@@ -1055,8 +1536,7 @@
           axisCtrl('Nose width', 'B', 'Small Nose_1', 'Small Nose_-1'),
           axisCtrl('Nose scale', 'B', 'Large Nose_0.5', 'Large Nose_-0.5'),
           axisCtrl('Nose vertical', 'S', 'Long Nose_0.5', 'Short Nose_0.5'),
-          axisCtrl('Nose tilt', 'S', 'Upturned Nose_0.5', 'Downturned Nose_0.5'),
-          axisCtrl('Nose Bridge', 'S', 'Bridge Out', 'Bridge In'),
+          axisCtrl('Nose Bridge', 'S', 'Bridge Out', 'Bridge In', null, 0, null, { min: -0.3, max: 0.3 }),
           axisCtrl('Nose tip shape', 'S', 'Button Nose_0.8', 'Pointy Nose_0.8'),
           axisCtrl('Nose tip length', 'S', 'Pinocchio_0.6', null),
           axisCtrl('Nose depth', 'S', 'Nose Out_0.2', 'Nose In_0.2'),
@@ -1067,6 +1547,7 @@
       {
         id: 'ears',
         label: 'Ears',
+        group: 'head',
         controls: [
           axisCtrl('Ear size', 'B', 'Big Ears', 'Small Ears_0.5'),
           axisCtrl('Ear vertical', 'S', 'Ears Up_0.4', 'Ears Down_0.4'),
@@ -1077,8 +1558,60 @@
         ],
       },
       {
+        id: 'makeupTex',
+        label: 'Makeup',
+        group: 'head',
+        controls: [
+          {
+            type: 'choice',
+            id: 'makeup',
+            label: 'Makeup / facial hair',
+            options: [
+              { value: 'NULL.png', label: 'None' },
+              { value: 'Makeup_1.png', label: 'Makeup 1' },
+              { value: 'Makeup_2.png', label: 'Makeup 2' },
+              { value: 'Makeup_3.png', label: 'Makeup 3' },
+              { value: 'Makeup_4.png', label: 'Makeup 4' },
+              { value: 'Makeup_5.png', label: 'Makeup 5' },
+              { value: 'Overlay_Facial_Hair_1.png', label: 'Facial hair 1' },
+              { value: 'Overlay_Facial_Hair_2.png', label: 'Facial hair 2' },
+              { value: 'Overlay_Facial_Hair_3.png', label: 'Facial hair 3' },
+              { value: 'Overlay_Facial_Hair_4.png', label: 'Facial hair 4' },
+              { value: 'Overlay_Facial_Hair_5.png', label: 'Facial hair 5' },
+              { value: 'Overlay_Facial_Hair_6.png', label: 'Facial hair 6' },
+              { value: 'Overlay_Facial_Hair_7.png', label: 'Facial hair 7' },
+              { value: 'Overlay_Facial_Hair_8.png', label: 'Facial hair 8' },
+              { value: 'Overlay_Facial_Hair_9.png', label: 'Facial hair 9' },
+              { value: 'Overlay_Facial_Hair_10.png', label: 'Facial hair 10' },
+              { value: 'Overlay_Facial_Hair_11.png', label: 'Facial hair 11' },
+            ],
+            defaultValue: 'NULL.png',
+          },
+        ],
+      },
+      {
+        id: 'faceOverlay',
+        label: 'Face overlay',
+        group: 'head',
+        controls: [
+          {
+            type: 'choice',
+            id: 'faceExtra',
+            label: 'Face overlay',
+            options: [
+              { value: 'none', label: 'None' },
+              { value: 'Overlay_Freckles_Face.png', label: 'Freckles' },
+              { value: 'Face_Tattoo_1.png', label: 'Tattoo 1' },
+              { value: 'Face_Tattoo_2.png', label: 'Tattoo 2' },
+            ],
+            defaultValue: 'none',
+          },
+        ],
+      },
+      {
         id: 'specials',
         label: 'Specials',
+        group: 'head',
         controls: [
           axisCtrl('Fangs', 'S', 'Vampire Teeth)+(Lower Fangs', null, 'idle_mouthopen'),
           axisCtrl('Split tongue', 'S', 'Forked Tongue', null, 'idle_mouthopen_tongueout'),
@@ -1129,6 +1662,8 @@
       fangs: { lean: 'skip' },
       split_tongue: { lean: 'skip' },
       height: { lean: 'skip' },
+      // App-driven blink morph — never randomize
+      anim_blink: { lean: 'skip' },
       headSize: { lean: 'neutral', clampMin: -0.12, clampMax: 0.12 },
 
       // Breasts: keep strong female lean (not softened)
@@ -1187,6 +1722,29 @@
     const MUSCLE_THICKNESS_CAP = 0.2;
     const MUSCLE_THICKNESS_IDS = ['chestThickness', 'waistThickness', 'hipThickness'];
 
+    /** Near-full gender expression on Randomizer → hard floors/ceilings after sampling. */
+    const GENDER_GUARD_FEMALE = 0.15; // g <= this → female mins/maxes
+    const GENDER_GUARD_MALE = 0.85;   // g >= this → male mins/maxes
+
+    /** Face / head categories — keep morph rolls mild (less extreme). */
+    const FACE_SOFT_CATS = new Set([
+      'headShapes', 'eyes', 'brows', 'jaw', 'ears', 'specials',
+    ]);
+    /** Mouth/nose randomize harder (full range) except these. */
+    const MOUTH_NOSE_KEEP_SOFT = new Set([
+      'upperLipSclX',
+      'lowerLipSclX',
+      'nose_scale',
+    ]);
+    /** Bipolar face sliders sample inside ± this instead of full −1…1. */
+    const FACE_BIPOLAR_SOFT = 0.32;
+    /** Face form (Bn) CTRLs also stay within ± this. */
+    const FACE_FORM_SOFT = 0.35;
+    /** Unipolar 0…1 keys: usually 0…commonMax; rareChance → up to rareMax. */
+    const UNIPOLAR_COMMON_MAX = 0.1;
+    const UNIPOLAR_RARE_MAX = 0.7;
+    const UNIPOLAR_RARE_CHANCE = 0.08;
+
     /**
      * Sample a value in [min,max] biased by gender g (0 fem ... 1 masc).
      * Returns null when lean is skip.
@@ -1232,6 +1790,30 @@
       }
       const v = lo + (hi - lo) * u;
       return Math.max(a, Math.min(b, +v.toFixed(3)));
+    }
+
+    /**
+     * Unipolar 0…1 shapekeys (no negative twin): usually stay near off (0…0.10).
+     * Rare rolls can reach up to ~0.70. Never centered at mid (0.5).
+     */
+    function sampleUnipolarSparse(min, max) {
+      const lo = Math.max(0, Number.isFinite(+min) ? +min : 0);
+      const hi = Math.max(lo, Number.isFinite(+max) ? +max : 1);
+      const commonHi = Math.min(hi, UNIPOLAR_COMMON_MAX);
+      const rareHi = Math.min(hi, UNIPOLAR_RARE_MAX);
+      if (Math.random() < UNIPOLAR_RARE_CHANCE && rareHi > commonHi) {
+        // Rare: draw in [commonHi, rareHi] with slight pull toward commonHi
+        const u = Math.random() * Math.random();
+        return +(commonHi + (rareHi - commonHi) * (1 - u)).toFixed(3);
+      }
+      return +(lo + Math.random() * (commonHi - lo)).toFixed(3);
+    }
+
+    function isUnipolarAxisControl(c) {
+      if (!c || c.type !== 'axis') return false;
+      if (c.negative && c.negative.length) return false;
+      const { min, max } = controlBoundsFromDef(c);
+      return min >= 0 && max > min;
     }
 
     function findMorphControlById(id) {
@@ -1292,7 +1874,23 @@
       if (c.type === 'genderPair' || c.type === 'iris') {
         return { min: c.min ?? 0, max: c.max ?? 1 };
       }
-      if (c.type === 'bone' || c.type === 'form') {
+      if (c.type === 'outfitHue') {
+        return { min: c.min ?? 0, max: c.max ?? 1 };
+      }
+      if (c.type === 'skinParam') {
+        return { min: c.min ?? 0, max: c.max ?? 1 };
+      }
+      if (c.type === 'choice') {
+        return { min: 0, max: Math.max(0, (c.options?.length || 1) - 1) };
+      }
+      if (c.type === 'form') {
+        const def = FORM_CTRL_DEFS[c.id];
+        return {
+          min: def?.sliderMin != null ? +def.sliderMin : -1,
+          max: def?.sliderMax != null ? +def.sliderMax : 1,
+        };
+      }
+      if (c.type === 'bone') {
         return { min: -1, max: 1 };
       }
       if (c.type === 'axis') {
@@ -1323,17 +1921,109 @@
       }
       if (c.type === 'form') {
         if (!Object.prototype.hasOwnProperty.call(formCtrlValues, c.id)) return false;
-        formCtrlValues[c.id] = Math.max(-1, Math.min(1, t));
+        const def = FORM_CTRL_DEFS[c.id];
+        const lo = def?.sliderMin != null ? +def.sliderMin : -1;
+        const hi = def?.sliderMax != null ? +def.sliderMax : 1;
+        formCtrlValues[c.id] = Math.max(lo, Math.min(hi, t));
         return true;
       }
       if (c.type === 'iris') {
         setIrisHue(t);
         return true;
       }
+      if (c.type === 'outfitHue') {
+        setUnderwearHue(t);
+        return true;
+      }
+      if (c.type === 'skinParam') {
+        setSkinParam(c.id, t);
+        return true;
+      }
+      if (c.type === 'choice') {
+        const val = choiceValueAt(c, t);
+        setTexChoice(c.id, val);
+        return true;
+      }
       if (c.type === 'axis') {
         return applyShapeAxis(c.id, t, { triggerAnim: false });
       }
       return false;
+    }
+
+    function findMorphControl(id) {
+      for (const cat of MORPH_CATEGORIES) {
+        for (const c of cat.controls) {
+          if (c.id === id) return c;
+        }
+      }
+      return null;
+    }
+
+    function readControlValue(c) {
+      if (!c) return null;
+      if (c.type === 'bone') {
+        if (c.id === 'height') return bodyHeight;
+        if (c.id === 'headSize') return bodyHeadSize;
+        return Object.prototype.hasOwnProperty.call(propValues, c.id) ? propValues[c.id] : null;
+      }
+      if (c.type === 'form') {
+        return Object.prototype.hasOwnProperty.call(formCtrlValues, c.id) ? formCtrlValues[c.id] : null;
+      }
+      if (c.type === 'axis') {
+        return Object.prototype.hasOwnProperty.call(shapeAxisValues, c.id) ? shapeAxisValues[c.id] : null;
+      }
+      return null;
+    }
+
+    function ensureControlAtLeast(id, floor) {
+      const c = findMorphControl(id);
+      if (!c) return;
+      const cur = readControlValue(c);
+      if (cur == null || !Number.isFinite(+cur)) return;
+      if (+cur < floor) applyRandomizedControl(c, floor);
+    }
+
+    function ensureControlAtMost(id, ceil) {
+      const c = findMorphControl(id);
+      if (!c) return;
+      const cur = readControlValue(c);
+      if (cur == null || !Number.isFinite(+cur)) return;
+      if (+cur > ceil) applyRandomizedControl(c, ceil);
+    }
+
+    function forceControlValue(id, value) {
+      const c = findMorphControl(id);
+      if (c) applyRandomizedControl(c, value);
+    }
+
+    /**
+     * Hard floors/ceilings when Gender expression is near full female or male.
+     * Glute size min applies for both. Mid expression (between thresholds) skips these.
+     */
+    function applyGenderExpressionGuards(g) {
+      const t = Math.max(0, Math.min(1, +g || 0));
+      // Both female + male lists require glute Bn >= 0.20
+      ensureControlAtLeast('gluteSizeScl', 0.20);
+
+      if (t <= GENDER_GUARD_FEMALE) {
+        ensureControlAtLeast('hipBone', 0.30);
+        ensureControlAtMost('chestThickness', 0.10);
+        ensureControlAtLeast('breastSizeScl', 0.10);
+        ensureControlAtLeast('breastVolumeScl', 0.50);
+        ensureControlAtLeast('butt_size_roundness', 0.10);
+      }
+      if (t >= GENDER_GUARD_MALE) {
+        ensureControlAtLeast('head_shape_morph', -0.20);
+        ensureControlAtLeast('lower_face_length', -0.20);
+        ensureControlAtLeast('shoulderWidth', 0.00);
+        ensureControlAtLeast('chestWidth', 0.20);
+        ensureControlAtLeast('chestThickness', 0.00);
+        ensureControlAtLeast('upperTorsoWidth', 0.00);
+        ensureControlAtMost('hipBone', 0.20);
+        ensureControlAtLeast('armSize', -0.30);
+        ensureControlAtLeast('muscular_morph', -0.70);
+        forceControlValue('breast_size_roundness', 0);
+      }
     }
 
     /** Roll all morph controls with gender bias. Keeps gender pair fixed. */
@@ -1344,13 +2034,22 @@
       let n = 0;
       let muscularVal = 0;
       for (const cat of MORPH_CATEGORIES) {
-        if (cat.id === 'randomizer') continue;
+        if (RANDOMIZE_SKIP_CATS.has(cat.id)) continue;
+        const faceSoftCat = FACE_SOFT_CATS.has(cat.id);
         for (const c of cat.controls) {
           const bias = RANDOM_BIAS[c.id] || { lean: 'neutral', strength: 0 };
           if (bias.lean === 'skip') continue;
+          const faceSoft = faceSoftCat
+            || ((cat.id === 'mouth' || cat.id === 'nose') && MOUTH_NOSE_KEEP_SOFT.has(c.id));
           let v;
           if (correlated.has(c.id)) {
             v = correlated.get(c.id);
+          } else if (isUnipolarAxisControl(c)) {
+            // Pointy ear, monolid, flatten nose, big belly, etc. — not mid-centered
+            let { min, max } = controlBoundsFromDef(c);
+            if (bias.clampMin != null) min = Math.max(min, +bias.clampMin);
+            if (bias.clampMax != null) max = Math.min(max, +bias.clampMax);
+            v = sampleUnipolarSparse(min, max);
           } else {
             let { min, max } = controlBoundsFromDef(c);
             if (bias.clampMin != null && Number.isFinite(+bias.clampMin)) {
@@ -1358,6 +2057,14 @@
             }
             if (bias.clampMax != null && Number.isFinite(+bias.clampMax)) {
               max = Math.min(max, +bias.clampMax);
+            }
+            // Soften face bipolar Sk + face Bn form CTRLs
+            if (faceSoft && c.type === 'axis') {
+              min = Math.max(min, -FACE_BIPOLAR_SOFT);
+              max = Math.min(max, FACE_BIPOLAR_SOFT);
+            } else if (faceSoft && (c.type === 'form' || c.type === 'bone')) {
+              min = Math.max(min, -FACE_FORM_SOFT);
+              max = Math.min(max, FACE_FORM_SOFT);
             }
             v = sampleBiased(
               min,
@@ -1388,6 +2095,8 @@
         }
       }
 
+      applyGenderExpressionGuards(g);
+
       // Specials stay off
       applyShapeAxis('fangs', 0, { triggerAnim: false });
       applyShapeAxis('split_tongue', 0, { triggerAnim: false });
@@ -1395,6 +2104,76 @@
       if (typeof applyFormCtrls === 'function') applyFormCtrls();
       if (typeof refreshHud === 'function') refreshHud();
       return { ok: true, count: n, gender: g };
+    }
+
+    /** Reset every morph, bone, form, and texture control to catalog defaults. */
+    async function restoreAllDefaults() {
+      showLoadOverlay('tint', 'Restoring defaults…');
+      await yieldForPaint();
+      setGenderExpression(0.5, { triggerAnim: false });
+      for (const def of SHAPE_AXIS_DEFS) {
+        applyShapeAxis(def.id, def.defaultValue ?? 0, { triggerAnim: false });
+      }
+      bodyHeight = 0;
+      bodyHeadSize = 0;
+      for (const k of Object.keys(propValues)) propValues[k] = 0;
+      for (const k of Object.keys(formCtrlValues)) formCtrlValues[k] = 0;
+      Object.assign(skinParams, {
+        skinDepth: 0.28,
+        warmth: 0,
+        redness: 0,
+        saturation: 1,
+        lipPink: 0.55,
+        lipStrength: 0.75,
+      });
+      texChoiceValues.skinTone = 'white';
+      irisHue = 0.58;
+      for (const cat of MORPH_CATEGORIES) {
+        for (const c of cat.controls) {
+          if (c.type === 'choice' && c.defaultValue != null) {
+            texChoiceValues[c.id] = c.defaultValue;
+          }
+        }
+      }
+      underwearHue = 0.5;
+      invalidateSkinBakeCache();
+      texturePreviewMode = false;
+      previewDirty.body = false;
+      previewDirty.head = false;
+      updateTexHint();
+      applyShapeAxis('fangs', 0, { triggerAnim: false });
+      applyShapeAxis('split_tongue', 0, { triggerAnim: false });
+      applyHeight();
+      applyFormCtrls();
+      try {
+        if (characterTexturesOn) {
+          await applyCharacterTextures({ hue: irisHue, preview: false });
+        }
+        refreshHud();
+        return { ok: true };
+      } finally {
+        hideLoadOverlay();
+        updateTexHint();
+      }
+    }
+
+    function setAnimDrivers(on) {
+      animDriversEnabled = !!on;
+      if (animDriversEnabled) {
+        morphAnimPreferred = null;
+        playAnimByName(currentLoopAnim(), { fallbackDefault: true });
+        blink.enabled = true;
+      } else {
+        morphAnimPreferred = null;
+        animPlaying = false;
+        for (const a of animActions) a.paused = true;
+        blink.enabled = false;
+        blink.value = 0;
+        blink.phase = 'wait';
+        if (blink.found) applyShapeKeyByName(BLINK_KEY, 0);
+      }
+      refreshHud();
+      return animDriversEnabled;
     }
 
     const SHAPE_KEY_CONTROLS = []; // unipolar folded into SHAPE_AXIS_DEFS
@@ -1416,7 +2195,7 @@
       .trim() || String(name || 'Group');
     let baselineMetrics = null;
     let lastMetrics = null;
-    let showBbox = true;
+    let showBbox = false;
     let bboxHelper = null;
     let clarityOn = false;
     let mapMode = null; // null | 'mesh' | 'region'
@@ -9852,22 +10631,86 @@
       return rest;
     }
 
+    /**
+     * Orbit / framing pivot XZ from torso spine — not full DEF AABB.
+     * Breast/limb DEF bones pull the bbox center in front of the mesh.
+     */
+    function findTorsoAnchor(root) {
+      if (!root) return null;
+      const prefer = [
+        'DEF-spine.002', 'DEF-spine002',
+        'DEF-spine.003', 'DEF-spine003',
+        'DEF-spine.001', 'DEF-spine001',
+        'DEF-spine', 'DEF-hips', 'hips', 'pelvis',
+        'CTRL-torso', 'torso',
+      ];
+      for (const name of prefer) {
+        const o = findObjectByName(root, name);
+        if (o) return o;
+      }
+      let found = null;
+      root.traverse((o) => {
+        if (found || !o?.name) return;
+        if (/^DEF-spine\.?00[123]$/i.test(o.name) || /^DEF-hips$/i.test(o.name)) {
+          found = o;
+        }
+      });
+      return found;
+    }
+
+    /** Body framing target: torso XZ + mid-height Y from bone metrics. */
+    function getBodyOrbitTarget(root, metrics) {
+      const m = metrics || computeBoneMetrics(root);
+      const fallback = m?.box?.center?.clone?.() || new THREE.Vector3(0, 0.85, 0);
+      const y = m?.box
+        ? m.box.min.y + Math.max(m.box.size.y, 0.5) * 0.42
+        : fallback.y;
+      const torso = findTorsoAnchor(root);
+      if (torso) {
+        const wp = new THREE.Vector3();
+        torso.getWorldPosition(wp);
+        return new THREE.Vector3(wp.x, y, wp.z);
+      }
+      return new THREE.Vector3(fallback.x, y, fallback.z);
+    }
+
+    /** Keep orbit pivot on the character without changing camera distance. */
+    function syncOrbitTargetToCharacter() {
+      if (!glbRoot) return false;
+      glbRoot.updateMatrixWorld(true);
+      findSkeleton(glbRoot)?.update();
+      const m = computeBoneMetrics(glbRoot);
+      if (!m?.box) return false;
+      if (cameraFraming === 'face') {
+        const head = findFaceAnchor(glbRoot);
+        if (head) {
+          const wp = new THREE.Vector3();
+          head.getWorldPosition(wp);
+          controls.target.set(wp.x, wp.y - Math.max(m.box.size.y, 0.5) * 0.02, wp.z);
+        } else {
+          controls.target.copy(getBodyOrbitTarget(glbRoot, m));
+        }
+      } else {
+        controls.target.copy(getBodyOrbitTarget(glbRoot, m));
+      }
+      controls.update();
+      return true;
+    }
+
     function frameCharacter(root, metricsOverride = null) {
       if (!root) return;
       root.updateMatrixWorld(true);
       findSkeleton(root)?.update();
       const m = metricsOverride || computeBoneMetrics(root);
       if (!m?.box) return;
-      const { size, center, min } = {
-        size: m.box.size,
-        center: m.box.center,
-        min: m.box.min,
-      };
+      const size = m.box.size;
+      const min = m.box.min;
       const height = Math.max(size.y, 0.5);
+      const target = getBodyOrbitTarget(root, m);
       const dist = Math.max(height * 2.55, size.x * 2.3, 3.8);
       const eyeY = min.y + height * 0.52;
-      camera.position.set(center.x, eyeY, center.z + dist);
-      controls.target.set(center.x, min.y + height * 0.42, center.z);
+      camera.position.set(target.x, eyeY, target.z + dist);
+      controls.target.copy(target);
       camera.lookAt(controls.target);
       camera.updateProjectionMatrix();
     }
@@ -9906,14 +10749,20 @@
       const m = metricsOverride || computeBoneMetrics(root);
       if (!m?.box) return false;
       const height = Math.max(m.box.size.y, 0.5);
-      const centerX = m.box.center.x;
-      const centerZ = m.box.center.z;
+      let centerX = m.box.center.x;
+      let centerZ = m.box.center.z;
       let faceY = m.box.min.y + height * 0.88;
       const head = findFaceAnchor(root);
       if (head) {
         const wp = new THREE.Vector3();
         head.getWorldPosition(wp);
+        centerX = wp.x;
+        centerZ = wp.z;
         faceY = wp.y;
+      } else {
+        const torso = getBodyOrbitTarget(root, m);
+        centerX = torso.x;
+        centerZ = torso.z;
       }
       // Closer framing than full-body - roughly head+neck crop
       const dist = Math.max(height * 0.85, m.box.size.x * 1.4, 1.35);
@@ -10632,7 +11481,11 @@
         return v * (+amp || 0) * s;
       };
       for (const def of Object.values(FORM_CTRL_DEFS)) {
-        const v = Math.max(-1, Math.min(1, +formCtrlValues[def.id] || 0));
+        const v = (() => {
+          const lo = def.sliderMin != null ? +def.sliderMin : -1;
+          const hi = def.sliderMax != null ? +def.sliderMax : 1;
+          return Math.max(lo, Math.min(hi, +formCtrlValues[def.id] || 0));
+        })();
         const targets = Array.isArray(def.targets) && def.targets.length
           ? def.targets
           : [{ bone: def.bone, sign: 1 }];
@@ -10648,7 +11501,11 @@
           } else if (def.mode === 'scl') {
             let mul;
             if (def.minMul != null && def.maxMul != null) {
-              mul = propRangeMul(v, null, null, def.minMul, def.maxMul);
+              // Honor slider beyond ±1 (e.g. lips forward 0…1.3) — do not clamp to ±1.
+              const vv = +v || 0;
+              const lo = +def.minMul;
+              const hi = +def.maxMul;
+              mul = vv >= 0 ? 1 + (hi - 1) * vv : 1 + (1 - lo) * vv;
             } else {
               mul = 1 + v * (+def.amp || 0) * sign;
             }
@@ -10930,15 +11787,162 @@
       legendEl.innerHTML = '';
     }
 
-    // -- Character preview textures (body / head / brow / eyes) --
+    // -- Character preview textures (body / head / overlays / eyes) --
     // Bump when publishing so GitHub Pages / browser caches cannot keep an old GLB or PNG.
-    const ASSET_REV = '20260813a';
+    const ASSET_REV = '20260813v';
     const textureLoader = new THREE.TextureLoader();
-    const TEX_URL = (file) => new URL(`./textures/${file}?v=${ASSET_REV}`, import.meta.url).href;
+    const TEX_URL = (file) => {
+      const enc = String(file || '').split('/').map(encodeURIComponent).join('/');
+      return new URL(`./textures/${enc}?v=${ASSET_REV}`, import.meta.url).href;
+    };
+
+    const SKIN_DIFFUSE = {
+      caucasian: {
+        body: 'body/main/diffuse/Caucasian_Body_D.png',
+        head: 'face/main/diffuse/Caucasian_Head_D.png',
+        tintable: false,
+      },
+      black: {
+        body: 'body/main/diffuse/Black Body_D.png',
+        head: 'face/main/diffuse/Black Head_D.png',
+        tintable: false,
+      },
+      white: {
+        body: 'body/main/diffuse/White_Body_D.png',
+        head: 'face/main/diffuse/White_Head_D.png',
+        tintable: true,
+      },
+    };
+    const BODY_ROUGH = 'body/main/roughness/Body_R.png';
+    const BODY_NORMAL = 'body/main/normalmap/Body_N.png';
+    const HEAD_ROUGH = 'face/main/roughness/Head_R.png';
+    const EYE_STYLES = {
+      toon: { iris: 'eyes/TOON_Iris.png', pupil: 'eyes/TOON_Pupil.png' },
+      real: { iris: 'eyes/REAL_Iris.png', pupil: 'eyes/REAL_Pupil.png' },
+      snake: { iris: 'eyes/SNAKE_Iris.png', pupil: 'eyes/SNAKE_Pupil.png' },
+    };
+    const EYE_SHINE = 'eyes/EYES_shine.png';
+
     let irisHue = 0.58; // 0..1 -> blue default
+    let underwearHue = 0.5;
+    /**
+     * Procedural OKLCH skin (Custom White base).
+     * SkinDepth anchors + Warmth/Redness; Saturation scales chroma;
+     * Lip pink/strength blend via optional Lip_Mask.png on the head only.
+     */
+    const skinParams = {
+      skinDepth: 0.28,
+      warmth: 0,
+      redness: 0,
+      saturation: 1,
+      lipPink: 0.55,
+      lipStrength: 0.75,
+    };
+    const SKIN_PARAM_KEYS = {
+      skinDepth: 'skinDepth',
+      skinWarmth: 'warmth',
+      skinRedness: 'redness',
+      skinSaturation: 'saturation',
+      lipPink: 'lipPink',
+      lipStrength: 'lipStrength',
+    };
+    const SKIN_PARAM_CLAMP = {
+      skinDepth: [0, 1],
+      warmth: [-1, 1],
+      redness: [-1, 1],
+      saturation: [0, 1.5],
+      lipPink: [0, 1],
+      lipStrength: [0, 1],
+    };
+    /** SkinDepth → OKLCH (L, C, H°) anchors — interpolate nearest pair. */
+    const SKIN_DEPTH_ANCHORS = [
+      { t: 0.00, L: 0.970, C: 0.025, H: 55 },
+      { t: 0.10, L: 0.930, C: 0.045, H: 52 },
+      { t: 0.20, L: 0.880, C: 0.070, H: 48 },
+      { t: 0.30, L: 0.825, C: 0.090, H: 45 },
+      { t: 0.40, L: 0.760, C: 0.105, H: 42 },
+      { t: 0.50, L: 0.690, C: 0.115, H: 40 },
+      { t: 0.60, L: 0.615, C: 0.115, H: 38 },
+      { t: 0.70, L: 0.535, C: 0.105, H: 35 },
+      { t: 0.80, L: 0.455, C: 0.090, H: 32 },
+      { t: 0.90, L: 0.375, C: 0.075, H: 30 },
+      { t: 1.00, L: 0.300, C: 0.060, H: 28 },
+    ];
+    const LIP_MASK_PATH = 'face/main/diffuse/Lip_Mask.png';
+    const SKIN_PREVIEW_MAX = 512;
+    let lipMaskAvailable = null; // null unknown, true/false after probe
     let characterTexturesOn = false;
-    let texCache = {}; // file -> THREE.Texture
-    let eyeMatRefs = []; // materials we can recolor
+    let texCache = {}; // cacheKey -> THREE.Texture
+    let eyeMatRefs = [];
+    let bodyMatRefs = [];
+    let headMatRefs = [];
+    /** Cached white-albedo luma + overlays for fast OKLCH slider updates. */
+    let skinBakeCache = null;
+    let skinOklchRaf = 0;
+    /** True while editing 4k maps — stay on 512 until the user leaves the category. */
+    let texturePreviewMode = false;
+    const previewDirty = { body: false, head: false };
+    const HEAD_TEX_CHOICES = new Set(['makeup', 'faceExtra', 'eyebrow', 'skinTone']);
+    const BODY_TEX_CHOICES = new Set(['bodyExtra', 'underwear', 'skinTone']);
+    const texChoiceValues = {
+      skinTone: 'white',
+      eyeStyle: 'toon',
+      eyebrow: 'EYEBROWS_1.png',
+      makeup: 'NULL.png',
+      faceExtra: 'none',
+      bodyExtra: 'none',
+      underwear: 'none',
+    };
+
+    function showLoadOverlay(mode = 'boot', text) {
+      const el = document.getElementById('loadOverlay');
+      if (!el) return;
+      el.classList.remove('hidden', 'boot', 'tint');
+      el.classList.add(mode === 'tint' ? 'tint' : 'boot');
+      const t = document.getElementById('loadOverlayText');
+      if (t) t.textContent = text || (mode === 'tint' ? 'Loading textures…' : 'Loading...');
+      void el.offsetWidth;
+    }
+
+    function hideLoadOverlay() {
+      const el = document.getElementById('loadOverlay');
+      if (!el) return;
+      el.classList.add('hidden');
+    }
+
+    function updateTexHint() {
+      const panel = document.getElementById('morphPanel');
+      if (!panel) return;
+      panel.classList.toggle('tex-preview', !!texturePreviewMode);
+      if (!texturePreviewMode) {
+        const pop = document.getElementById('texHintPop');
+        const btn = document.getElementById('texHintBtn');
+        if (pop) pop.hidden = true;
+        if (btn) btn.setAttribute('aria-expanded', 'false');
+      }
+    }
+
+    function yieldForPaint() {
+      return new Promise((resolve) => {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => setTimeout(resolve, 0));
+        });
+      });
+    }
+
+    function tintOverlayDataByHue(data, hue) {
+      const col = irisColorFromHue(hue);
+      const tr = col.r * 255;
+      const tg = col.g * 255;
+      const tb = col.b * 255;
+      for (let i = 0; i < data.length; i += 4) {
+        if (data[i + 3] < 1) continue;
+        const luma = (data[i] + data[i + 1] + data[i + 2]) / (3 * 255);
+        data[i] = tr * luma;
+        data[i + 1] = tg * luma;
+        data[i + 2] = tb * luma;
+      }
+    }
 
     function irisColorFromHue(h) {
       const col = new THREE.Color();
@@ -10946,16 +11950,151 @@
       return col;
     }
 
-    function loadTex(file) {
-      if (texCache[file]) return Promise.resolve(texCache[file]);
+    function clamp01(x) {
+      return Math.max(0, Math.min(1, +x || 0));
+    }
+
+    function clampRange(x, lo, hi) {
+      return Math.max(lo, Math.min(hi, +x || 0));
+    }
+
+    function normalizeHueDeg(h) {
+      let x = +h || 0;
+      x %= 360;
+      if (x < 0) x += 360;
+      return x;
+    }
+
+    /** sRGB 0…1 → OKLCH (H in degrees). */
+    function srgbToOklch(r, g, b) {
+      const toLin = (c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+      const R = toLin(r);
+      const G = toLin(g);
+      const B = toLin(b);
+      const l = 0.4122214708 * R + 0.5363325363 * G + 0.0514459929 * B;
+      const m = 0.2119034982 * R + 0.6806995451 * G + 0.1073969566 * B;
+      const s = 0.0883024619 * R + 0.2817188376 * G + 0.6299787005 * B;
+      const l_ = Math.cbrt(l);
+      const m_ = Math.cbrt(m);
+      const s_ = Math.cbrt(s);
+      const L = 0.2104542553 * l_ + 0.7936177850 * m_ - 0.0040720468 * s_;
+      const a = 1.9779984951 * l_ - 2.4285922050 * m_ + 0.4505937099 * s_;
+      const bb = 0.0259040371 * l_ + 0.7827717662 * m_ - 0.8086757660 * s_;
+      const C = Math.hypot(a, bb);
+      let H = Math.atan2(bb, a) * (180 / Math.PI);
+      if (H < 0) H += 360;
+      return { L, C, H };
+    }
+
+    function oklchFromImageData(data) {
+      const n = data.length >> 2;
+      const L = new Float32Array(n);
+      const C = new Float32Array(n);
+      const H = new Float32Array(n);
+      for (let j = 0, i = 0; j < n; j++, i += 4) {
+        const o = srgbToOklch(data[i] / 255, data[i + 1] / 255, data[i + 2] / 255);
+        L[j] = o.L;
+        C[j] = o.C;
+        H[j] = o.H;
+      }
+      return { L, C, H };
+    }
+
+    /** OKLCH → sRGB (Björn Ottosson). L 0…1, C chroma, h radians. */
+    function oklchToSrgb(L, C, hRad) {
+      const a = C * Math.cos(hRad);
+      const b = C * Math.sin(hRad);
+      const l_ = L + 0.3963377774 * a + 0.2158037573 * b;
+      const m_ = L - 0.1055613458 * a - 0.0638541728 * b;
+      const s_ = L - 0.0894841775 * a - 1.2914855480 * b;
+      const l = l_ * l_ * l_;
+      const m = m_ * m_ * m_;
+      const s = s_ * s_ * s_;
+      let r = +4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s;
+      let g = -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s;
+      let bl = -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s;
+      const toSrgb = (x) => {
+        const v = Math.max(0, x);
+        return v <= 0.0031308 ? 12.92 * v : 1.055 * (v ** (1 / 2.4)) - 0.055;
+      };
+      return {
+        r: clamp01(toSrgb(r)),
+        g: clamp01(toSrgb(g)),
+        b: clamp01(toSrgb(bl)),
+      };
+    }
+
+    function lerpSkinDepthAnchors(depth) {
+      const d = clamp01(depth);
+      const anchors = SKIN_DEPTH_ANCHORS;
+      if (d <= anchors[0].t) return { L: anchors[0].L, C: anchors[0].C, H: anchors[0].H };
+      const last = anchors[anchors.length - 1];
+      if (d >= last.t) return { L: last.L, C: last.C, H: last.H };
+      for (let i = 0; i < anchors.length - 1; i++) {
+        const a = anchors[i];
+        const b = anchors[i + 1];
+        if (d >= a.t && d <= b.t) {
+          const u = (d - a.t) / (b.t - a.t);
+          return {
+            L: a.L + (b.L - a.L) * u,
+            C: a.C + (b.C - a.C) * u,
+            H: a.H + (b.H - a.H) * u,
+          };
+        }
+      }
+      return { L: last.L, C: last.C, H: last.H };
+    }
+
+    /**
+     * Base skin OKLCH from SkinDepth / Warmth / Redness / Saturation.
+     * Returns { L, C, H } with H in degrees 0…360.
+     */
+    function computeSkinOklch(p) {
+      const depth = clamp01(p?.skinDepth);
+      const warmth = clampRange(p?.warmth, -1, 1);
+      const redness = clampRange(p?.redness, -1, 1);
+      const sat = clampRange(p?.saturation, 0, 1.5);
+      let { L, C, H } = lerpSkinDepthAnchors(depth);
+      H += warmth * 18;
+      H -= redness * 10;
+      C += Math.max(redness, 0) * 0.015;
+      C *= sat;
+      C = Math.max(0, C);
+      H = normalizeHueDeg(H);
+      return { L, C, H };
+    }
+
+    function skinParamsToRgb(p) {
+      const { L, C, H } = computeSkinOklch(p);
+      return oklchToSrgb(L, C, (H * Math.PI) / 180);
+    }
+
+    function skinParamsToThreeColor(p) {
+      const rgb = skinParamsToRgb(p);
+      return new THREE.Color(rgb.r, rgb.g, rgb.b);
+    }
+
+    /** Lip OKLCH — pinker/redder than skin; fairer depths keep more chroma. */
+    function computeLipOklch(skinLch, p) {
+      const pink = clamp01(p?.lipPink);
+      const depth = clamp01(p?.skinDepth);
+      const L = clamp01(skinLch.L * (0.88 + pink * 0.04) - 0.02);
+      const C = Math.max(0, 0.04 + pink * 0.09 + (1 - depth) * 0.025);
+      const H = normalizeHueDeg(18 + pink * 8 + clampRange(p?.warmth, -1, 1) * 6);
+      return { L, C, H };
+    }
+
+    function loadTex(file, { srgb = true } = {}) {
+      const key = `${srgb ? 's' : 'l'}:${file}`;
+      if (texCache[key]) return Promise.resolve(texCache[key]);
       return new Promise((resolve, reject) => {
         textureLoader.load(
           TEX_URL(file),
           (tex) => {
-            tex.colorSpace = THREE.SRGBColorSpace;
-            tex.flipY = false; // glTF / Blender UV convention
+            tex.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+            tex.flipY = false;
             tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
-            texCache[file] = tex;
+            texCache[key] = tex;
             resolve(tex);
           },
           undefined,
@@ -10964,11 +12103,634 @@
       });
     }
 
+    function canvasFromImage(img, w, h) {
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      return { canvas, ctx };
+    }
+
+    /**
+     * White grayscale albedo → OKLCH skin (uses precomputed luma — fast path).
+     * TextureL = luma[j]; FinalL = SkinL + (TextureL - 0.85) * 0.35
+     */
+    function lumaFromImageData(data) {
+      const n = data.length >> 2;
+      const out = new Float32Array(n);
+      for (let j = 0, i = 0; j < n; j++, i += 4) {
+        out[j] = (0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2]) / 255;
+      }
+      return out;
+    }
+
+    function lipMaskLumaFromImageData(data) {
+      const n = data.length >> 2;
+      const out = new Float32Array(n);
+      for (let j = 0, i = 0; j < n; j++, i += 4) {
+        out[j] = data[i] / 255;
+      }
+      return out;
+    }
+
+    function applyOklchFromLuma(luma, outData, lipMaskLuma, p) {
+      const skin = computeSkinOklch(p);
+      const lip = computeLipOklch(skin, p);
+      const lipBias = clamp01(p?.lipStrength) * (0.35 + (1 - clamp01(p?.skinDepth)) * 0.65);
+      const n = luma.length;
+      for (let j = 0, i = 0; j < n; j++, i += 4) {
+        let L = skin.L;
+        let C = skin.C;
+        let H = skin.H;
+        if (lipMaskLuma && lipBias > 0.001) {
+          const m = lipMaskLuma[j];
+          if (m > 0.01) {
+            const w = Math.min(1, m * lipBias);
+            L = L + (lip.L - L) * w;
+            C = C + (lip.C - C) * w;
+            let dH = lip.H - H;
+            if (dH > 180) dH -= 360;
+            if (dH < -180) dH += 360;
+            H = normalizeHueDeg(H + dH * w);
+          }
+        }
+        let finalL = L + (luma[j] - 0.85) * 0.35;
+        finalL = clamp01(finalL);
+        const rgb = oklchToSrgb(finalL, C, (H * Math.PI) / 180);
+        outData[i] = (rgb.r * 255 + 0.5) | 0;
+        outData[i + 1] = (rgb.g * 255 + 0.5) | 0;
+        outData[i + 2] = (rgb.b * 255 + 0.5) | 0;
+        outData[i + 3] = 255;
+      }
+    }
+
+    /** Adjust a baked preset (Caucasian / Black) with the same sliders. Default values ≈ original map. */
+    function applyPresetOklchAdjust(src, outData, lipMaskLuma, p) {
+      if (!src) return;
+      const depthDelta = (0.28 - clamp01(p?.skinDepth)) * 0.55;
+      const warmth = clampRange(p?.warmth, -1, 1);
+      const redness = clampRange(p?.redness, -1, 1);
+      const sat = clampRange(p?.saturation, 0, 1.5);
+      const hueShift = warmth * 18 - redness * 10;
+      const cAdd = Math.max(redness, 0) * 0.015;
+      const skin = computeSkinOklch(p);
+      const lip = computeLipOklch(skin, p);
+      const lipBias = clamp01(p?.lipStrength) * (0.35 + (1 - clamp01(p?.skinDepth)) * 0.65);
+      const n = src.L.length;
+      for (let j = 0, i = 0; j < n; j++, i += 4) {
+        let L = clamp01(src.L[j] + depthDelta);
+        let C = Math.max(0, src.C[j] * sat + cAdd);
+        let H = normalizeHueDeg(src.H[j] + hueShift);
+        if (lipMaskLuma && lipBias > 0.001) {
+          const m = lipMaskLuma[j];
+          if (m > 0.01) {
+            const w = Math.min(1, m * lipBias);
+            L = L + (lip.L - L) * w;
+            C = C + (lip.C - C) * w;
+            let dH = lip.H - H;
+            if (dH > 180) dH -= 360;
+            if (dH < -180) dH += 360;
+            H = normalizeHueDeg(H + dH * w);
+          }
+        }
+        const rgb = oklchToSrgb(L, C, (H * Math.PI) / 180);
+        outData[i] = (rgb.r * 255 + 0.5) | 0;
+        outData[i + 1] = (rgb.g * 255 + 0.5) | 0;
+        outData[i + 2] = (rgb.b * 255 + 0.5) | 0;
+        outData[i + 3] = 255;
+      }
+    }
+
+    /** Legacy path when cache is cold (first load). */
+    function applyOklchSkinToImageData(data, p, lipMaskData) {
+      const luma = lumaFromImageData(data);
+      let lipMaskLuma = null;
+      if (lipMaskData) {
+        lipMaskLuma = new Float32Array(luma.length);
+        for (let j = 0, i = 0; j < lipMaskLuma.length; j++, i += 4) {
+          lipMaskLuma[j] = lipMaskData[i] / 255;
+        }
+      }
+      applyOklchFromLuma(luma, data, lipMaskLuma, p);
+    }
+
+    function headOverlayKey() {
+      return [texChoiceValues.makeup, texChoiceValues.faceExtra, texChoiceValues.eyebrow].join('|');
+    }
+
+    function bodyOverlayKey() {
+      return [texChoiceValues.bodyExtra, texChoiceValues.underwear, underwearHue.toFixed(3)].join('|');
+    }
+
+    function disposeSkinTier(tier) {
+      if (!tier) return;
+      tier.bodyTex?.dispose?.();
+      tier.headTex?.dispose?.();
+    }
+
+    function invalidateSkinBakeCache() {
+      if (skinBakeCache) {
+        disposeSkinTier(skinBakeCache.full);
+        disposeSkinTier(skinBakeCache.preview);
+      }
+      skinBakeCache = null;
+    }
+
+    async function loadOverlayPixelData(path, w, h, mode, { tintHue = null } = {}) {
+      const tex = await loadTex(path);
+      const { ctx } = canvasFromImage(tex.image, w, h);
+      const data = ctx.getImageData(0, 0, w, h).data;
+      if (tintHue != null) tintOverlayDataByHue(data, tintHue);
+      return { data, mode };
+    }
+
+    async function loadHeadOverlayStack(w, h) {
+      const out = [];
+      const makeup = texChoiceValues.makeup;
+      if (makeup && makeup !== 'NULL.png') {
+        out.push(await loadOverlayPixelData(`face/overlays/makeup/${makeup}`, w, h, 'alpha'));
+      }
+      const faceExtra = texChoiceValues.faceExtra;
+      if (faceExtra && faceExtra !== 'none') {
+        out.push(await loadOverlayPixelData(`face/overlays/extra/${faceExtra}`, w, h, 'alpha'));
+      }
+      return out;
+    }
+
+    const browAlphaCache = {};
+    function whiteKeyToAlphaCanvas(img) {
+      const w = img.width || 1;
+      const h = img.height || 1;
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      const id = ctx.getImageData(0, 0, w, h);
+      const d = id.data;
+      for (let i = 0; i < d.length; i += 4) {
+        const luma = (d[i] + d[i + 1] + d[i + 2]) / 3;
+        d[i + 3] = luma >= 245 ? 0 : Math.min(255, Math.round((245 - luma) * (255 / 245)));
+      }
+      ctx.putImageData(id, 0, 0);
+      return canvas;
+    }
+
+    async function loadEyebrowAlphaCanvas() {
+      const brow = texChoiceValues.eyebrow;
+      if (!brow || brow === 'none') return null;
+      const path = `face/overlays/eyebrows/${brow}`;
+      if (browAlphaCache[path]) return browAlphaCache[path];
+      const tex = await loadTex(path);
+      const canvas = whiteKeyToAlphaCanvas(tex.image);
+      browAlphaCache[path] = canvas;
+      return canvas;
+    }
+
+    function compositeNativeBrows(tier, browAlpha) {
+      if (!tier || !browAlpha) return;
+      const dw = browAlpha.width;
+      const dh = browAlpha.height;
+      if (tier.hw === dw && tier.hh === dh) {
+        tier.headCtx.drawImage(browAlpha, 0, 0);
+        return;
+      }
+      if (!tier.headSharp) {
+        tier.headSharp = document.createElement('canvas');
+        tier.headSharp.width = dw;
+        tier.headSharp.height = dh;
+        tier.headSharpCtx = tier.headSharp.getContext('2d');
+        tier.headSharpTex = texToCanvasTexture(tier.headSharp);
+      }
+      const ctx = tier.headSharpCtx;
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.clearRect(0, 0, dw, dh);
+      ctx.drawImage(tier.headCanvas, 0, 0, dw, dh);
+      ctx.drawImage(browAlpha, 0, 0);
+      tier.headSharpTex.needsUpdate = true;
+    }
+
+    function imageToCanvas(img) {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width || 1;
+      canvas.height = img.height || 1;
+      canvas.getContext('2d').drawImage(img, 0, 0);
+      return canvas;
+    }
+
+    async function loadBodyOverlayAlphaCanvases() {
+      const out = [];
+      const bodyExtra = texChoiceValues.bodyExtra;
+      if (bodyExtra && bodyExtra !== 'none') {
+        try {
+          const tex = await loadTex(`body/overlays/extra/${bodyExtra}`);
+          out.push(imageToCanvas(tex.image));
+        } catch (err) {
+          console.warn('[textures] body overlay missing:', bodyExtra, err?.message || err);
+        }
+      }
+      const uw = texChoiceValues.underwear;
+      if (uw && uw !== 'none') {
+        const uwPath = `body/overlays/underwear/${uw}/${uw}_D.png`;
+        try {
+          const tex = await loadTex(uwPath);
+          const canvas = imageToCanvas(tex.image);
+          const ctx = canvas.getContext('2d');
+          const id = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          tintOverlayDataByHue(id.data, underwearHue);
+          ctx.putImageData(id, 0, 0);
+          out.push(canvas);
+        } catch (err) {
+          console.warn('[textures] underwear missing:', uwPath, err?.message || err);
+        }
+      }
+      return out;
+    }
+
+    function compositeNativeBodyOverlays(tier, alphas) {
+      if (!tier || !alphas?.length) return;
+      const dw = alphas[0].width;
+      const dh = alphas[0].height;
+      if (tier.bw === dw && tier.bh === dh) {
+        for (const c of alphas) tier.bodyCtx.drawImage(c, 0, 0);
+        return;
+      }
+      if (!tier.bodySharp || tier.bodySharp.width !== dw || tier.bodySharp.height !== dh) {
+        tier.bodySharp = document.createElement('canvas');
+        tier.bodySharp.width = dw;
+        tier.bodySharp.height = dh;
+        tier.bodySharpCtx = tier.bodySharp.getContext('2d');
+        tier.bodySharpTex = texToCanvasTexture(tier.bodySharp);
+      }
+      const ctx = tier.bodySharpCtx;
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.clearRect(0, 0, dw, dh);
+      ctx.drawImage(tier.bodyCanvas, 0, 0, dw, dh);
+      for (const c of alphas) ctx.drawImage(c, 0, 0, dw, dh);
+      tier.bodySharpTex.needsUpdate = true;
+    }
+
+    async function loadBodyOverlayStack(w, h) {
+      const out = [];
+      const bodyExtra = texChoiceValues.bodyExtra;
+      if (bodyExtra && bodyExtra !== 'none') {
+        out.push(await loadOverlayPixelData(`body/overlays/extra/${bodyExtra}`, w, h, 'alpha'));
+      }
+      const uw = texChoiceValues.underwear;
+      if (uw && uw !== 'none') {
+        out.push(await loadOverlayPixelData(
+          `body/overlays/underwear/${uw}/${uw}_D.png`, w, h, 'alpha', { tintHue: underwearHue },
+        ));
+      }
+      return out;
+    }
+
+    function compositeOverlayStack(imageData, overlays) {
+      for (const ov of overlays) {
+        if (ov.mode === 'whiteKey') compositeWhiteKey(imageData.data, ov.data);
+        else compositeAlpha(imageData.data, ov.data);
+      }
+    }
+
+    function makeSkinTierFromSource(bodyImg, headImg, lipMaskImg, bodyOverlays, headOverlays, bw, bh, hw, hh, { storeOklch = false } = {}) {
+      const bodyCanvas = document.createElement('canvas');
+      bodyCanvas.width = bw;
+      bodyCanvas.height = bh;
+      const bodyCtx = bodyCanvas.getContext('2d');
+      bodyCtx.drawImage(bodyImg, 0, 0, bw, bh);
+      const bodyPixels = bodyCtx.getImageData(0, 0, bw, bh).data;
+      const bodyLuma = storeOklch ? null : lumaFromImageData(bodyPixels);
+      const bodyOklch = storeOklch ? oklchFromImageData(bodyPixels) : null;
+
+      const headCanvas = document.createElement('canvas');
+      headCanvas.width = hw;
+      headCanvas.height = hh;
+      const headCtx = headCanvas.getContext('2d');
+      headCtx.drawImage(headImg, 0, 0, hw, hh);
+      const headPixels = headCtx.getImageData(0, 0, hw, hh).data;
+      const headLuma = storeOklch ? null : lumaFromImageData(headPixels);
+      const headOklch = storeOklch ? oklchFromImageData(headPixels) : null;
+
+      let lipMaskLuma = null;
+      if (lipMaskImg) {
+        const lc = document.createElement('canvas');
+        lc.width = hw;
+        lc.height = hh;
+        const lx = lc.getContext('2d');
+        lx.drawImage(lipMaskImg, 0, 0, hw, hh);
+        lipMaskLuma = lipMaskLumaFromImageData(lx.getImageData(0, 0, hw, hh).data);
+      }
+
+      return {
+        bw, bh, hw, hh,
+        bodyLuma,
+        headLuma,
+        bodyOklch,
+        headOklch,
+        lipMaskLuma,
+        bodyOverlays,
+        headOverlays,
+        bodyCanvas,
+        bodyCtx,
+        headCanvas,
+        headCtx,
+        bodyOut: bodyCtx.createImageData(bw, bh),
+        headOut: headCtx.createImageData(hw, hh),
+        bodyTex: texToCanvasTexture(bodyCanvas),
+        headTex: texToCanvasTexture(headCanvas),
+      };
+    }
+
+    function paintSkinTier(tier, p, { sharpOverlays = true } = {}) {
+      if (!tier) return;
+      if (tier.bodyOklch) applyPresetOklchAdjust(tier.bodyOklch, tier.bodyOut.data, null, p);
+      else applyOklchFromLuma(tier.bodyLuma, tier.bodyOut.data, null, p);
+      compositeOverlayStack(tier.bodyOut, tier.bodyOverlays);
+      tier.bodyCtx.putImageData(tier.bodyOut, 0, 0);
+      if (sharpOverlays) compositeNativeBodyOverlays(tier, skinBakeCache?.bodyAlphas);
+
+      if (tier.headOklch) applyPresetOklchAdjust(tier.headOklch, tier.headOut.data, tier.lipMaskLuma, p);
+      else applyOklchFromLuma(tier.headLuma, tier.headOut.data, tier.lipMaskLuma, p);
+      compositeOverlayStack(tier.headOut, tier.headOverlays);
+      tier.headCtx.putImageData(tier.headOut, 0, 0);
+      if (sharpOverlays) compositeNativeBrows(tier, skinBakeCache?.browAlpha);
+
+      tier.bodyTex.needsUpdate = true;
+      tier.headTex.needsUpdate = true;
+    }
+
+    function pushSkinTexturesToMaterials(tier, parts = { body: true, head: true }, { preview = false } = {}) {
+      if (!tier) return;
+      if (parts.body !== false) {
+        const bodyMap = preview ? tier.bodyTex : (tier.bodySharpTex || tier.bodyTex);
+        for (const mat of bodyMatRefs) {
+          mat.map = bodyMap;
+          mat.needsUpdate = true;
+        }
+      }
+      if (parts.head !== false) {
+        const headMap = preview ? tier.headTex : (tier.headSharpTex || tier.headTex);
+        for (const mat of headMatRefs) {
+          mat.map = headMap;
+          mat.needsUpdate = true;
+        }
+      }
+    }
+
+    function refreshSkinPreviewUi() {
+      const el = document.getElementById('skinPreview');
+      if (!el?.classList.contains('visible')) return;
+      const sw = el.querySelector('.swatch');
+      const lab = el.querySelector('.md-hex');
+      if (sw) {
+        const hex = `#${skinParamsToThreeColor(skinParams).getHexString()}`;
+        sw.style.background = hex;
+        if (lab) lab.textContent = hex;
+      }
+    }
+
+    function runSkinOklchPaint() {
+      skinOklchRaf = 0;
+      if (!characterTexturesOn || !skinBakeCache?.ready) return;
+      const usePreview = texturePreviewMode || !skinBakeCache.full;
+      const tier = usePreview ? skinBakeCache.preview : skinBakeCache.full;
+      if (!tier) return;
+      paintSkinTier(tier, skinParams, { sharpOverlays: false });
+      pushSkinTexturesToMaterials(tier, previewDirty, { preview: true });
+      refreshSkinPreviewUi();
+    }
+
+    function scheduleSkinOklchPaint() {
+      if (!characterTexturesOn) return;
+      if (!skinBakeCache?.ready) {
+        applyCharacterTextures({ hue: irisHue, preview: true });
+        return;
+      }
+      if (skinOklchRaf) return;
+      skinOklchRaf = requestAnimationFrame(runSkinOklchPaint);
+    }
+
+    function beginTexturePreview(parts = { body: true, head: true }) {
+      texturePreviewMode = true;
+      if (parts.body) previewDirty.body = true;
+      if (parts.head) previewDirty.head = true;
+      updateTexHint();
+    }
+
+    async function commitTextureFullQuality() {
+      if (!characterTexturesOn || !texturePreviewMode) return;
+      showLoadOverlay('tint', 'Loading textures…');
+      await yieldForPaint();
+      const parts = { body: previewDirty.body, head: previewDirty.head };
+      texturePreviewMode = false;
+      try {
+        await ensureSkinBakeCache({ previewOnly: false });
+        const tier = skinBakeCache?.full || skinBakeCache?.preview;
+        paintSkinTier(tier, skinParams);
+        pushSkinTexturesToMaterials(tier, parts);
+      } finally {
+        previewDirty.body = false;
+        previewDirty.head = false;
+        hideLoadOverlay();
+        updateTexHint();
+      }
+    }
+
+    function onSkinSliderDragStart() {
+      beginTexturePreview();
+    }
+
+    function onSkinSliderDragEnd() {
+      beginTexturePreview();
+      const tier = skinBakeCache?.preview;
+      if (!tier) return;
+      paintSkinTier(tier, skinParams, { sharpOverlays: true });
+      pushSkinTexturesToMaterials(tier, previewDirty);
+    }
+
+    function previewSize(w, h) {
+      const s = Math.min(1, SKIN_PREVIEW_MAX / Math.max(w, h));
+      return {
+        w: Math.max(1, Math.round(w * s)),
+        h: Math.max(1, Math.round(h * s)),
+      };
+    }
+
+    async function ensureSkinBakeCache({ previewOnly = false } = {}) {
+      const tone = texChoiceValues.skinTone || 'white';
+      const skin = SKIN_DIFFUSE[tone] || SKIN_DIFFUSE.white;
+      if (skinBakeCache && skinBakeCache.tone !== tone) invalidateSkinBakeCache();
+      const storeOklch = tone !== 'white';
+      const hKey = headOverlayKey();
+      const bKey = bodyOverlayKey();
+
+      const [bodyTex, headTex] = await Promise.all([
+        loadTex(skin.body),
+        loadTex(skin.head),
+      ]);
+      const bw = bodyTex.image?.width || 4096;
+      const bh = bodyTex.image?.height || 4096;
+      const hw = headTex.image?.width || 4096;
+      const hh = headTex.image?.height || 4096;
+
+      let lipMaskImg = null;
+      try {
+        const lipTex = await loadTex(LIP_MASK_PATH, { srgb: false });
+        lipMaskAvailable = true;
+        lipMaskImg = lipTex.image;
+      } catch {
+        lipMaskAvailable = false;
+      }
+
+      const pb = previewSize(bw, bh);
+      const ph = previewSize(hw, hh);
+
+      if (!skinBakeCache?.preview) {
+        const [headOverlaysPrev, browAlpha, bodyAlphas] = await Promise.all([
+          loadHeadOverlayStack(ph.w, ph.h),
+          loadEyebrowAlphaCanvas(),
+          loadBodyOverlayAlphaCanvases(),
+        ]);
+        const bodyPrevCanvas = document.createElement('canvas');
+        bodyPrevCanvas.width = pb.w;
+        bodyPrevCanvas.height = pb.h;
+        bodyPrevCanvas.getContext('2d').drawImage(bodyTex.image, 0, 0, pb.w, pb.h);
+        const headPrevCanvas = document.createElement('canvas');
+        headPrevCanvas.width = ph.w;
+        headPrevCanvas.height = ph.h;
+        headPrevCanvas.getContext('2d').drawImage(headTex.image, 0, 0, ph.w, ph.h);
+        let lipPrevImg = null;
+        if (lipMaskImg) {
+          const lc = document.createElement('canvas');
+          lc.width = ph.w;
+          lc.height = ph.h;
+          lc.getContext('2d').drawImage(lipMaskImg, 0, 0, ph.w, ph.h);
+          lipPrevImg = lc;
+        }
+        const preview = makeSkinTierFromSource(
+          bodyPrevCanvas, headPrevCanvas, lipPrevImg,
+          [], headOverlaysPrev, pb.w, pb.h, ph.w, ph.h, { storeOklch },
+        );
+        skinBakeCache = {
+          ready: true, tone, headKey: hKey, bodyKey: bKey, full: null, preview, browAlpha, bodyAlphas,
+        };
+      } else {
+        if (skinBakeCache.headKey !== hKey) {
+          const [headOverlaysPrev, browAlpha] = await Promise.all([
+            loadHeadOverlayStack(skinBakeCache.preview.hw, skinBakeCache.preview.hh),
+            loadEyebrowAlphaCanvas(),
+          ]);
+          skinBakeCache.browAlpha = browAlpha;
+          skinBakeCache.preview.headOverlays = headOverlaysPrev;
+          skinBakeCache.preview.headSharp = null;
+          skinBakeCache.preview.headSharpTex = null;
+          if (skinBakeCache.full) {
+            skinBakeCache.full.headOverlays = await loadHeadOverlayStack(skinBakeCache.full.hw, skinBakeCache.full.hh);
+          }
+          skinBakeCache.headKey = hKey;
+        }
+        if (skinBakeCache.bodyKey !== bKey) {
+          skinBakeCache.bodyAlphas = await loadBodyOverlayAlphaCanvases();
+          if (skinBakeCache.preview) {
+            skinBakeCache.preview.bodySharp = null;
+            skinBakeCache.preview.bodySharpTex = null;
+          }
+          skinBakeCache.bodyKey = bKey;
+        }
+      }
+
+      if (!previewOnly && !skinBakeCache.full) {
+        const [headOverlaysFull, browAlpha, bodyAlphas] = await Promise.all([
+          loadHeadOverlayStack(hw, hh),
+          loadEyebrowAlphaCanvas(),
+          loadBodyOverlayAlphaCanvases(),
+        ]);
+        skinBakeCache.browAlpha = browAlpha;
+        skinBakeCache.bodyAlphas = bodyAlphas;
+        skinBakeCache.full = makeSkinTierFromSource(
+          bodyTex.image, headTex.image, lipMaskImg,
+          [], headOverlaysFull, bw, bh, hw, hh, { storeOklch },
+        );
+      }
+
+      return skinBakeCache;
+    }
+
+    async function tryLoadLipMask(w, h) {
+      try {
+        const tex = await loadTex(LIP_MASK_PATH, { srgb: false });
+        lipMaskAvailable = true;
+        const { ctx } = canvasFromImage(tex.image, w, h);
+        return ctx.getImageData(0, 0, w, h).data;
+      } catch {
+        lipMaskAvailable = false;
+        return null;
+      }
+    }
+
+    /** White-background overlay (eyebrows): near-white = transparent. */
+    function compositeWhiteKey(baseData, overlayData) {
+      for (let i = 0; i < baseData.length; i += 4) {
+        const br = overlayData[i];
+        const bg = overlayData[i + 1];
+        const bb = overlayData[i + 2];
+        const luma = (br + bg + bb) / 3;
+        if (luma >= 245) continue;
+        const a = Math.min(1, (245 - luma) / 245);
+        baseData[i] = br * a + baseData[i] * (1 - a);
+        baseData[i + 1] = bg * a + baseData[i + 1] * (1 - a);
+        baseData[i + 2] = bb * a + baseData[i + 2] * (1 - a);
+      }
+    }
+
+    /** Full-alpha overlay (makeup / tattoos / underwear diffuse). */
+    function compositeAlpha(baseData, overlayData) {
+      for (let i = 0; i < baseData.length; i += 4) {
+        const a = overlayData[i + 3] / 255;
+        if (a < 0.01) continue;
+        baseData[i] = overlayData[i] * a + baseData[i] * (1 - a);
+        baseData[i + 1] = overlayData[i + 1] * a + baseData[i + 1] * (1 - a);
+        baseData[i + 2] = overlayData[i + 2] * a + baseData[i + 2] * (1 - a);
+      }
+    }
+
+    function texToCanvasTexture(canvas) {
+      const map = new THREE.CanvasTexture(canvas);
+      map.colorSpace = THREE.SRGBColorSpace;
+      map.flipY = false;
+      map.needsUpdate = true;
+      return map;
+    }
+
+    async function drawOverlay(ctx, imageData, path, mode) {
+      if (!path || path === 'none' || path === 'NULL.png') return;
+      let tex;
+      try {
+        tex = await loadTex(path);
+      } catch (err) {
+        console.warn('[textures] overlay missing:', path, err?.message || err);
+        return;
+      }
+      const w = imageData.width;
+      const h = imageData.height;
+      const { canvas: oc, ctx: octx } = canvasFromImage(tex.image, w, h);
+      const od = octx.getImageData(0, 0, w, h).data;
+      if (mode === 'whiteKey') compositeWhiteKey(imageData.data, od);
+      else compositeAlpha(imageData.data, od);
+      ctx.putImageData(imageData, 0, 0);
+      oc.width = 0;
+      oc.height = 0;
+    }
+
     /** Composite iris (tinted) + black pupil masks -> CanvasTexture. */
-    async function buildIrisPupilMap(hue) {
+    async function buildIrisPupilMap(hue, style) {
+      const eye = EYE_STYLES[style] || EYE_STYLES.toon;
       const [irisTex, pupilTex] = await Promise.all([
-        loadTex('TOON_Iris.png'),
-        loadTex('TOON_Pupil.png'),
+        loadTex(eye.iris),
+        loadTex(eye.pupil),
       ]);
       const w = irisTex.image?.width || 1024;
       const h = irisTex.image?.height || 1024;
@@ -11015,54 +12777,84 @@
         }
       }
       ctx.putImageData(out, 0, 0);
-      const map = new THREE.CanvasTexture(canvas);
-      map.colorSpace = THREE.SRGBColorSpace;
-      map.flipY = false;
-      map.needsUpdate = true;
-      return map;
+      return texToCanvasTexture(canvas);
     }
 
-    /** Head albedo + eyebrow PNG (white bg treated as transparent) composited on top. */
-    async function buildHeadWithBrowsMap() {
-      const [headTex, browTex] = await Promise.all([
-        loadTex('Caucasian_Head_D.png'),
-        loadTex('EYEBROWS_1.png'),
-      ]);
-      const w = headTex.image?.width || 4096;
-      const h = headTex.image?.height || 4096;
-      const canvas = document.createElement('canvas');
-      canvas.width = w;
-      canvas.height = h;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(headTex.image, 0, 0, w, h);
+    async function buildHeadAlbedoMap({ maxDim = 0 } = {}) {
+      const skin = SKIN_DIFFUSE[texChoiceValues.skinTone] || SKIN_DIFFUSE.caucasian;
+      const headTex = await loadTex(skin.head);
+      let w = headTex.image?.width || 4096;
+      let h = headTex.image?.height || 4096;
+      if (maxDim > 0 && Math.max(w, h) > maxDim) {
+        const s = maxDim / Math.max(w, h);
+        w = Math.max(1, Math.round(w * s));
+        h = Math.max(1, Math.round(h * s));
+      }
+      const { canvas, ctx } = canvasFromImage(headTex.image, w, h);
       const out = ctx.getImageData(0, 0, w, h);
-      const od = out.data;
-
-      const browCanvas = document.createElement('canvas');
-      browCanvas.width = w;
-      browCanvas.height = h;
-      const bctx = browCanvas.getContext('2d');
-      bctx.drawImage(browTex.image, 0, 0, w, h);
-      const bd = bctx.getImageData(0, 0, w, h).data;
-
-      // Flat white (or near-white) = no brow; darker strokes blend over the face.
-      for (let i = 0; i < od.length; i += 4) {
-        const br = bd[i];
-        const bg = bd[i + 1];
-        const bb = bd[i + 2];
-        const luma = (br + bg + bb) / 3;
-        if (luma >= 245) continue;
-        const a = Math.min(1, (245 - luma) / 245);
-        od[i] = br * a + od[i] * (1 - a);
-        od[i + 1] = bg * a + od[i + 1] * (1 - a);
-        od[i + 2] = bb * a + od[i + 2] * (1 - a);
+      if (skin.tintable) {
+        const lipMask = await tryLoadLipMask(w, h);
+        applyOklchSkinToImageData(out.data, skinParams, lipMask);
       }
       ctx.putImageData(out, 0, 0);
-      const map = new THREE.CanvasTexture(canvas);
-      map.colorSpace = THREE.SRGBColorSpace;
-      map.flipY = false;
-      map.needsUpdate = true;
-      return map;
+
+      const makeup = texChoiceValues.makeup;
+      if (makeup && makeup !== 'NULL.png') {
+        await drawOverlay(ctx, out, `face/overlays/makeup/${makeup}`, 'alpha');
+      }
+      const faceExtra = texChoiceValues.faceExtra;
+      if (faceExtra && faceExtra !== 'none') {
+        await drawOverlay(ctx, out, `face/overlays/extra/${faceExtra}`, 'alpha');
+      }
+      const browAlpha = await loadEyebrowAlphaCanvas();
+      if (browAlpha) {
+        if (w !== browAlpha.width || h !== browAlpha.height) {
+          const sharp = document.createElement('canvas');
+          sharp.width = browAlpha.width;
+          sharp.height = browAlpha.height;
+          const sctx = sharp.getContext('2d');
+          sctx.imageSmoothingEnabled = true;
+          sctx.imageSmoothingQuality = 'high';
+          sctx.drawImage(canvas, 0, 0, sharp.width, sharp.height);
+          sctx.drawImage(browAlpha, 0, 0);
+          return texToCanvasTexture(sharp);
+        }
+        ctx.drawImage(browAlpha, 0, 0);
+      }
+      return texToCanvasTexture(canvas);
+    }
+
+    async function buildBodyAlbedoMap({ maxDim = 0 } = {}) {
+      const skin = SKIN_DIFFUSE[texChoiceValues.skinTone] || SKIN_DIFFUSE.caucasian;
+      const bodyTex = await loadTex(skin.body);
+      let w = bodyTex.image?.width || 4096;
+      let h = bodyTex.image?.height || 4096;
+      if (maxDim > 0 && Math.max(w, h) > maxDim) {
+        const s = maxDim / Math.max(w, h);
+        w = Math.max(1, Math.round(w * s));
+        h = Math.max(1, Math.round(h * s));
+      }
+      const { canvas, ctx } = canvasFromImage(bodyTex.image, w, h);
+      const out = ctx.getImageData(0, 0, w, h);
+      if (skin.tintable) applyOklchSkinToImageData(out.data, skinParams, null);
+      ctx.putImageData(out, 0, 0);
+
+      const alphas = await loadBodyOverlayAlphaCanvases();
+      if (alphas.length) {
+        if (w !== alphas[0].width || h !== alphas[0].height) {
+          const sharp = document.createElement('canvas');
+          sharp.width = alphas[0].width;
+          sharp.height = alphas[0].height;
+          const sctx = sharp.getContext('2d');
+          sctx.imageSmoothingEnabled = true;
+          sctx.imageSmoothingQuality = 'high';
+          sctx.drawImage(canvas, 0, 0, sharp.width, sharp.height);
+          for (const c of alphas) sctx.drawImage(c, 0, 0, sharp.width, sharp.height);
+          return texToCanvasTexture(sharp);
+        }
+        for (const c of alphas) ctx.drawImage(c, 0, 0);
+      }
+      return texToCanvasTexture(canvas);
     }
 
     function materialRole(name) {
@@ -11071,7 +12863,7 @@
       if (/shine/.test(n)) return 'shine';
       if (/eye/.test(n) && !/lid|lash/.test(n)) return 'eye';
       if (/head|face/.test(n)) return 'head';
-      if (/brow/.test(n)) return 'brow'; // legacy separate brow mesh
+      if (/brow/.test(n)) return 'brow';
       if (/body|basemesh|female|skin/.test(n)) return 'body';
       return null;
     }
@@ -11082,10 +12874,10 @@
       const alphaTest = opts.alphaTest || 0;
       const emissiveHex = opts.emissive != null ? opts.emissive : 0x000000;
       const eInt = opts.emissiveIntensity != null ? opts.emissiveIntensity : 0;
-      return new THREE.MeshStandardMaterial({
+      const mat = new THREE.MeshStandardMaterial({
         map: map || null,
         color: 0xffffff,
-        roughness: 0.65,
+        roughness: opts.roughness != null ? opts.roughness : 0.65,
         metalness: 0.02,
         transparent: transparent,
         alphaTest: alphaTest,
@@ -11094,23 +12886,98 @@
         emissiveMap: eInt > 0 ? map : null,
         side: THREE.FrontSide,
       });
+      if (opts.roughnessMap) {
+        mat.roughnessMap = opts.roughnessMap;
+        mat.roughness = 1;
+      }
+      if (opts.normalMap) {
+        mat.normalMap = opts.normalMap;
+        mat.normalScale = new THREE.Vector2(1, 1);
+      }
+      return mat;
     }
 
-    async function applyCharacterTextures({ hue = irisHue } = {}) {
-      if (!glbRoot) return { ok: false, reason: 'no glb' };
-      backupMaterials();
-      const [bodyMap, headFaceMap, eyeMap] = await Promise.all([
-        loadTex('Caucasian_Body_D.png'),
-        buildHeadWithBrowsMap(),
-        buildIrisPupilMap(hue),
-      ]);
-      let shineMap = null;
-      try {
-        shineMap = await loadTex('EYES_shine.png');
-      } catch {
-        shineMap = null;
+    function findChoiceControl(id) {
+      for (const cat of MORPH_CATEGORIES) {
+        for (const c of cat.controls) {
+          if (c.type === 'choice' && c.id === id) return c;
+        }
       }
+      return null;
+    }
+
+    function choiceIndex(c, value) {
+      const opts = c?.options || [];
+      const i = opts.findIndex((o) => o.value === value);
+      return i >= 0 ? i : 0;
+    }
+
+    function choiceValueAt(c, index) {
+      const opts = c?.options || [];
+      const i = Math.max(0, Math.min(opts.length - 1, Math.round(+index || 0)));
+      return opts[i]?.value ?? opts[0]?.value;
+    }
+
+    async function applyCharacterTextures({
+      hue = irisHue,
+      preview = texturePreviewMode,
+      parts = null,
+    } = {}) {
+      if (!glbRoot) return { ok: false, reason: 'no glb' };
+      const need = parts || { body: true, head: true, eyes: true };
+      backupMaterials();
+      irisHue = hue;
+      const style = texChoiceValues.eyeStyle || 'toon';
+      let bodyMap;
+      let headFaceMap;
+      if (need.body || need.head) {
+        await ensureSkinBakeCache({ previewOnly: !!preview });
+        const tier = preview && skinBakeCache.preview
+          ? skinBakeCache.preview
+          : (skinBakeCache.full || skinBakeCache.preview);
+        paintSkinTier(tier, skinParams);
+        if (need.body) bodyMap = tier.bodySharpTex || tier.bodyTex;
+        if (need.head) headFaceMap = tier.headSharpTex || tier.headTex;
+      }
+      let eyeMap = null;
+      if (need.eyes !== false) eyeMap = await buildIrisPupilMap(irisHue, style);
+
+      if (characterTexturesOn && (bodyMatRefs.length || headMatRefs.length || eyeMatRefs.length)) {
+        if (need.body && bodyMap) {
+          for (const mat of bodyMatRefs) {
+            mat.map = bodyMap;
+            mat.needsUpdate = true;
+          }
+        }
+        if (need.head && headFaceMap) {
+          for (const mat of headMatRefs) {
+            mat.map = headFaceMap;
+            mat.needsUpdate = true;
+          }
+        }
+        if (need.eyes !== false && eyeMap) {
+          for (const mat of eyeMatRefs) {
+            if (mat.map && mat.map.isCanvasTexture) mat.map.dispose();
+            mat.map = eyeMap;
+            mat.needsUpdate = true;
+          }
+        }
+        refreshSkinPreviewUi();
+        return { ok: true, patched: true, irisHue, skinParams: { ...skinParams }, choices: { ...texChoiceValues } };
+      }
+
+      let shineMap = null;
+      let bodyRough = null;
+      let bodyNormal = null;
+      let headRough = null;
+      try { shineMap = await loadTex(EYE_SHINE); } catch { /* optional */ }
+      try { bodyRough = await loadTex(BODY_ROUGH, { srgb: false }); } catch { /* optional */ }
+      try { bodyNormal = await loadTex(BODY_NORMAL, { srgb: false }); } catch { /* optional */ }
+      try { headRough = await loadTex(HEAD_ROUGH, { srgb: false }); } catch { /* optional */ }
+
       eyeMatRefs = [];
+      bodyMatRefs = [];
+      headMatRefs = [];
       const report = { body: 0, head: 0, brow: 0, eye: 0, shine: 0, outline: 0, other: 0 };
       glbRoot.traverse((o) => {
         if (!o.isMesh) return;
@@ -11147,12 +13014,12 @@
           }
           if (role === 'head') {
             report.head += 1;
-            const mat = makePreviewMat(headFaceMap);
+            const mat = makePreviewMat(headFaceMap, { roughnessMap: headRough });
             mat.name = oldMat?.name || 'head';
+            headMatRefs.push(mat);
             return mat;
           }
           if (role === 'brow') {
-            // Legacy: separate brow mesh - brows already in headFaceMap for Head slot.
             report.brow += 1;
             const mat = makePreviewMat(headFaceMap, { transparent: true, alphaTest: 0.15 });
             mat.name = oldMat?.name || 'brow';
@@ -11160,8 +13027,12 @@
           }
           if (role === 'body') {
             report.body += 1;
-            const mat = makePreviewMat(bodyMap);
+            const mat = makePreviewMat(bodyMap, {
+              roughnessMap: bodyRough,
+              normalMap: bodyNormal,
+            });
             mat.name = oldMat?.name || 'body';
+            bodyMatRefs.push(mat);
             return mat;
           }
           report.other += 1;
@@ -11174,15 +13045,24 @@
       });
       mapMode = 'textures';
       characterTexturesOn = true;
-      irisHue = hue;
-      console.log('[textures]', report);
-      return { ok: true, ...report, irisHue: hue };
+      console.log('[textures]', report, { ...texChoiceValues, irisHue, skinParams: { ...skinParams }, lipMask: lipMaskAvailable });
+      refreshSkinPreviewUi();
+      return { ok: true, ...report, irisHue, skinParams: { ...skinParams }, choices: { ...texChoiceValues }, lipMask: lipMaskAvailable };
+    }
+
+    async function setUnderwearHue(h) {
+      underwearHue = Math.max(0, Math.min(1, +h));
+      beginTexturePreview({ body: true, head: false });
+      if (characterTexturesOn) {
+        await applyCharacterTextures({ hue: irisHue, preview: true, parts: { body: true, head: false, eyes: false } });
+      }
+      return underwearHue;
     }
 
     async function setIrisHue(h) {
       irisHue = Math.max(0, Math.min(1, +h));
       if (!characterTexturesOn || !glbRoot) return irisHue;
-      const eyeMap = await buildIrisPupilMap(irisHue);
+      const eyeMap = await buildIrisPupilMap(irisHue, texChoiceValues.eyeStyle || 'toon');
       if (eyeMatRefs.length) {
         for (const mat of eyeMatRefs) {
           if (mat.map && mat.map.isCanvasTexture) mat.map.dispose();
@@ -11190,10 +13070,39 @@
           mat.needsUpdate = true;
         }
       } else {
-        // Re-run assign in case meshes appear; still updates cache for next apply.
         await applyCharacterTextures({ hue: irisHue });
       }
       return irisHue;
+    }
+
+    function setSkinParam(id, value) {
+      const key = SKIN_PARAM_KEYS[id];
+      if (!key) return null;
+      const [lo, hi] = SKIN_PARAM_CLAMP[key] || [0, 1];
+      skinParams[key] = clampRange(value, lo, hi);
+      beginTexturePreview({ body: true, head: true });
+      scheduleSkinOklchPaint();
+      return skinParams[key];
+    }
+
+    async function setTexChoice(id, value) {
+      if (!Object.prototype.hasOwnProperty.call(texChoiceValues, id)) return null;
+      texChoiceValues[id] = value;
+      if (id === 'eyeStyle') {
+        if (characterTexturesOn) {
+          await applyCharacterTextures({ hue: irisHue, parts: { body: false, head: false, eyes: true } });
+        }
+        return texChoiceValues[id];
+      }
+      if (id === 'skinTone') invalidateSkinBakeCache();
+      const parts = {
+        body: BODY_TEX_CHOICES.has(id),
+        head: HEAD_TEX_CHOICES.has(id),
+        eyes: false,
+      };
+      beginTexturePreview(parts);
+      if (characterTexturesOn) await applyCharacterTextures({ hue: irisHue, preview: true, parts });
+      return texChoiceValues[id];
     }
 
     function setOutlineVisible(on) {
@@ -11208,10 +13117,12 @@
     function setClarityMode(on) {
       clarityOn = !!on;
       document.body.classList.toggle('clarity', clarityOn);
+      rulerGroup.visible = false;
       if (clarityOn) {
         scene.background = new THREE.Color(0xe8ecf1);
         wall.material.map = makeChecker(512, 16, '#d0d5dd', '#c2c8d2');
         wall.material.needsUpdate = true;
+        wall.visible = true;
         gridFloor.visible = true;
         key.intensity = 1.35;
         fill.intensity = 0.55;
@@ -11219,8 +13130,8 @@
         setOutlineVisible(false);
         showBbox = false;
         updateBboxHelper();
-        // Clay only when not already textured / debug-mapped.
-        if (!mapMode) {
+        // Clay only before textures exist / when not debug-mapped.
+        if (!mapMode && !characterTexturesOn) {
           backupMaterials();
           glbRoot?.traverse((o) => {
             if (!o.isMesh || !o.visible) return;
@@ -11233,14 +13144,14 @@
           });
         }
       } else {
-        scene.background = new THREE.Color(0x2a2a2a);
-        wall.material.map = makeChecker();
-        wall.material.needsUpdate = true;
+        scene.background = new THREE.Color(0x1a1a1a);
+        wall.visible = false;
+        gridFloor.visible = false;
         key.intensity = 1.1;
         fill.intensity = 0.35;
         rim.intensity = 0.45;
         setOutlineVisible(true);
-        if (!mapMode) restoreMaterials();
+        if (!mapMode && !characterTexturesOn) restoreMaterials();
       }
       refreshHud();
       return true;
@@ -11599,6 +13510,97 @@
       return true;
     }
 
+    /**
+     * Procedural blink overlay — drives shapekey `anim_blink` (0 open … 1 closed).
+     * Runs after mixer + form CTRLs so lids follow eye bones without a blink Action.
+     */
+    const BLINK_KEY = 'anim_blink';
+    const blink = {
+      enabled: true,
+      found: false,
+      phase: 'wait', // wait | closing | hold | opening
+      t: 0,
+      value: 0,
+      nextIn: 1.2 + Math.random() * 2.5,
+      closeDur: 0.06,
+      holdDur: 0.05,
+      openDur: 0.1,
+      doubleChance: 0.18,
+      pendingDouble: false,
+    };
+
+    function refreshBlinkKeyPresence() {
+      blink.found = !!findShapeKeyName(BLINK_KEY);
+      if (!blink.found) {
+        blink.value = 0;
+        blink.phase = 'wait';
+      }
+      return blink.found;
+    }
+
+    function easeInOutQuad(u) {
+      const x = Math.max(0, Math.min(1, u));
+      return x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2;
+    }
+
+    function scheduleNextBlink(afterDouble = false) {
+      if (afterDouble) {
+        blink.nextIn = 0.08 + Math.random() * 0.12;
+        blink.pendingDouble = false;
+        return;
+      }
+      blink.nextIn = 1.6 + Math.random() * 3.4;
+      blink.pendingDouble = Math.random() < blink.doubleChance;
+    }
+
+    function startBlinkClose() {
+      blink.phase = 'closing';
+      blink.t = 0;
+    }
+
+    function updateBlink(dt) {
+      if (!animDriversEnabled || !blink.enabled || !blink.found || !(dt > 0)) return;
+      const d = Math.min(0.05, +dt || 0);
+
+      if (blink.phase === 'wait') {
+        blink.nextIn -= d;
+        blink.value = 0;
+        if (blink.nextIn <= 0) startBlinkClose();
+      } else if (blink.phase === 'closing') {
+        blink.t += d;
+        const u = blink.t / blink.closeDur;
+        blink.value = easeInOutQuad(Math.min(1, u));
+        if (u >= 1) {
+          blink.phase = 'hold';
+          blink.t = 0;
+          blink.value = 1;
+        }
+      } else if (blink.phase === 'hold') {
+        blink.t += d;
+        blink.value = 1;
+        if (blink.t >= blink.holdDur) {
+          blink.phase = 'opening';
+          blink.t = 0;
+        }
+      } else if (blink.phase === 'opening') {
+        blink.t += d;
+        const u = blink.t / blink.openDur;
+        blink.value = 1 - easeInOutQuad(Math.min(1, u));
+        if (u >= 1) {
+          blink.value = 0;
+          if (blink.pendingDouble) {
+            scheduleNextBlink(true);
+            blink.phase = 'wait';
+          } else {
+            scheduleNextBlink(false);
+            blink.phase = 'wait';
+          }
+        }
+      }
+
+      applyShapeKeyByName(BLINK_KEY, blink.value);
+    }
+
     function applyTargetList(targets, weight) {
       // weight is 0..1 slider magnitude; each target gets weight * max (max may be negative)
       for (const t of targets || []) {
@@ -11649,6 +13651,7 @@
     }
 
     function onMorphControlSelected(defOrAnim) {
+      if (!animDriversEnabled) return;
       const anim = typeof defOrAnim === 'string'
         ? defOrAnim
         : (defOrAnim?.anim || null);
@@ -11765,9 +13768,18 @@
     }
 
     function listMorphCategories() {
-      return MORPH_CATEGORIES.map((cat) => ({
+      const byId = new Map(MORPH_CATEGORIES.map((cat) => [cat.id, cat]));
+      const ordered = CATEGORY_DISPLAY_ORDER
+        .map((id) => byId.get(id))
+        .filter((cat) => cat && !HIDDEN_CATEGORIES.has(cat.id));
+      for (const cat of MORPH_CATEGORIES) {
+        if (HIDDEN_CATEGORIES.has(cat.id)) continue;
+        if (!ordered.includes(cat)) ordered.push(cat);
+      }
+      return ordered.map((cat) => ({
         id: cat.id,
         label: cat.label,
+        group: cat.group || 'ungrouped',
         count: cat.controls.length,
       }));
     }
@@ -11813,9 +13825,10 @@
           const bones = def ? formCtrlBoneNames(def) : [];
           let unit = '';
           if (def?.mode === 'pos') {
-            unit = def.min != null && def.max != null
-              ? `${def.min}...${def.max}m`
-              : `\u00b1${def.amp}m`;
+            unit = `\u00b1${def.amp}m`;
+            if (def.sliderMin != null || def.sliderMax != null) {
+              unit += ` (slider ${def.sliderMin ?? -1}...${def.sliderMax ?? 1})`;
+            }
           } else if (def?.mode === 'rot') {
             unit = def.min != null && def.max != null
               ? `${def.min}...${def.max} rad`
@@ -11832,8 +13845,8 @@
             drive: 'Bn',
             boneMorph: true,
             value: formCtrlValues[c.id] ?? 0,
-            min: -1,
-            max: 1,
+            min: def?.sliderMin != null ? +def.sliderMin : -1,
+            max: def?.sliderMax != null ? +def.sliderMax : 1,
             anim: null,
             formBone: bones.join(' + ') || null,
             formMode: def?.mode || null,
@@ -11856,6 +13869,53 @@
             anim: null,
             positiveLabel: 'hue',
             negativeLabel: 'Iris color',
+          });
+        } else if (c.type === 'outfitHue') {
+          out.push({
+            type: 'outfitHue',
+            id: c.id,
+            label: c.label,
+            drive: '',
+            boneMorph: false,
+            value: underwearHue,
+            min: c.min ?? 0,
+            max: c.max ?? 1,
+            anim: null,
+            positiveLabel: 'hue',
+            negativeLabel: 'Outfit tint',
+          });
+        } else if (c.type === 'skinParam') {
+          const key = SKIN_PARAM_KEYS[c.id];
+          out.push({
+            type: 'skinParam',
+            id: c.id,
+            label: c.label,
+            drive: '',
+            boneMorph: false,
+            value: key != null ? skinParams[key] : (c.defaultValue ?? 0),
+            min: c.min ?? 0,
+            max: c.max ?? 1,
+            anim: null,
+            positiveLabel: 'OKLCH',
+            negativeLabel: 'Custom White',
+          });
+        } else if (c.type === 'choice') {
+          const opts = c.options || [];
+          const cur = texChoiceValues[c.id] ?? c.defaultValue ?? opts[0]?.value;
+          out.push({
+            type: 'choice',
+            id: c.id,
+            label: c.label,
+            drive: '',
+            boneMorph: false,
+            value: choiceIndex(c, cur),
+            min: 0,
+            max: Math.max(0, opts.length - 1),
+            anim: null,
+            options: opts,
+            choiceValue: cur,
+            positiveLabel: opts.map((o) => o.label).join(' | '),
+            negativeLabel: 'pick',
           });
         } else if (c.type === 'genderPair') {
           out.push({
@@ -11900,6 +13960,7 @@
     }
 
     async function loadGlbFromUrl(url) {
+      showLoadOverlay('boot', 'Loading...');
       statusEl.textContent = 'Loading GLB...';
       if (!heightRecipe) await loadHeightRecipe();
       const gltf = await new GLTFLoader().loadAsync(url);
@@ -11941,6 +14002,8 @@
       }
       const skInfo = buildShapeKeyCatalog();
       console.log('[shapekeys]', skInfo);
+      const blinkOk = refreshBlinkKeyPresence();
+      console.log('[blink]', blinkOk ? `overlay on "${BLINK_KEY}"` : `missing shapekey "${BLINK_KEY}"`);
       // After mixer init, re-apply procedural height from frozen bind rest.
       if (heightApplyEnabled) applyHeight();
       else refreshAfterPose();
@@ -11953,6 +14016,7 @@
       baselineMetrics = lastMetrics ? { ...lastMetrics } : null;
       rebuildRulers(Math.max(2.0, (lastMetrics?.maxY || 1.5) + 0.3), 0.1);
       frameCharacter(glbRoot);
+      setClarityMode(true);
       const animInfo = animList().map((a) => a.name).join(',') || 'none';
       const texBit = texInfo?.ok
         ? ` - tex body=${texInfo.body} brow=${texInfo.brow} eye=${texInfo.eye} head=${texInfo.head}`
@@ -11960,6 +14024,7 @@
       statusEl.textContent = `Loaded - bones=${listBoneNames(glbRoot).length} - root=${heightRoot?.name || '-'} - anim=${animInfo} - mode=${heightMode}${heightParentBones.length ? ` - CTRLx${heightParentBones.length}` : ''}${formN ? ` - formCTRLx${formN}` : ''}${heightRootOverlay ? ' - ground' : ''} - shapekeys=${skInfo.keys}/${skInfo.groups.length}g${texBit}`;
       refreshHud();
       window._sandboxReady = true;
+      hideLoadOverlay();
       return true;
     }
 
@@ -11981,7 +14046,10 @@
     };
     window.sandboxSetFormCtrl = (id, value) => {
       if (!Object.prototype.hasOwnProperty.call(formCtrlValues, id)) return false;
-      formCtrlValues[id] = Math.max(-1, Math.min(1, +value));
+      const def = FORM_CTRL_DEFS[id];
+      const lo = def?.sliderMin != null ? +def.sliderMin : -1;
+      const hi = def?.sliderMax != null ? +def.sliderMax : 1;
+      formCtrlValues[id] = Math.max(lo, Math.min(hi, +value));
       applyFormCtrls();
       refreshHud();
       return true;
@@ -12086,6 +14154,32 @@
     };
     window.sandboxGetGenderExpression = () => getGenderExpression();
     window.sandboxRandomize = (g) => randomizeAllControls(g);
+    window.sandboxRestoreDefaults = () => restoreAllDefaults();
+    window.sandboxSetAnimDrivers = (on) => setAnimDrivers(on);
+    window.sandboxGetAnimDrivers = () => animDriversEnabled;
+    window.sandboxSetBlink = (on) => {
+      blink.enabled = !!on;
+      if (!blink.enabled) {
+        blink.value = 0;
+        blink.phase = 'wait';
+        if (blink.found) applyShapeKeyByName(BLINK_KEY, 0);
+      }
+      return blink.enabled;
+    };
+    window.sandboxBlinkNow = () => {
+      if (!refreshBlinkKeyPresence()) return false;
+      blink.enabled = true;
+      startBlinkClose();
+      return true;
+    };
+    window.sandboxGetBlink = () => ({
+      enabled: blink.enabled,
+      found: blink.found,
+      key: BLINK_KEY,
+      phase: blink.phase,
+      value: blink.value,
+      nextIn: blink.nextIn,
+    });
     window.sandboxSetShapeKeyControl = (controlId, value) => {
       const ok = applyShapeKeyControl(controlId, value);
       if (ok) refreshHud();
@@ -12124,8 +14218,14 @@
     window.sandboxSetBbox = (on) => { showBbox = !!on; updateBboxHelper(); return true; };
     window.sandboxSetClarity = setClarityMode;
     window.sandboxSetIrisHue = (h) => setIrisHue(h);
+    window.sandboxSetUnderwearHue = (h) => setUnderwearHue(h);
+    window.sandboxGetUnderwearHue = () => underwearHue;
+    window.sandboxSetSkinParam = (id, value) => setSkinParam(id, value);
+    window.sandboxSetTexChoice = (id, value) => setTexChoice(id, value);
     window.sandboxApplyTextures = () => applyCharacterTextures({ hue: irisHue });
     window.sandboxGetIrisHue = () => irisHue;
+    window.sandboxGetSkinParams = () => ({ ...skinParams });
+    window.sandboxGetTexChoices = () => ({ ...texChoiceValues });
     window.sandboxColorByMesh = colorByMeshParts;
     window.sandboxColorByBoneRegion = colorByBoneRegions;
     window.sandboxClearMap = () => { restoreMaterials(); if (clarityOn) setClarityMode(true); return true; };
@@ -12410,6 +14510,7 @@
         applyHeightParents();
       }
       applyFormCtrls();
+      updateBlink(dt);
       // mul/compose when not playing: only via applyHeight() / animSeek (need fresh mixer sample)
       if (controls.enabled) controls.update();
       renderer.render(scene, camera);
@@ -12423,25 +14524,30 @@
     const DEFAULT_MODEL_URL = new URL(`./models/height_overlay_clean.glb?v=${ASSET_REV}`, import.meta.url).href;
     const morphPanel = document.getElementById('morphPanel');
     const catSelect = document.getElementById('catSelect');
-    const ctrlSelectRow = document.getElementById('ctrlSelectRow');
-    const ctrlSelect = document.getElementById('ctrlSelect');
+    const catPrev = document.getElementById('catPrev');
+    const catNext = document.getElementById('catNext');
+    const tileScrollBox = document.getElementById('tileScrollBox');
+    const catPlaceholder = document.getElementById('catPlaceholder');
+    const ctrlTileGrid = document.getElementById('ctrlTileGrid');
+    const sliderRow = document.getElementById('sliderRow');
+    const sliderWrap = document.getElementById('sliderWrap');
     const ctrlSlider = document.getElementById('ctrlSlider');
-    const ctrlValueEl = document.getElementById('ctrlValue');
-    const ctrlHintEl = document.getElementById('ctrlHint');
-    const btnMin = document.getElementById('btnMin');
-    const btnMid = document.getElementById('btnMid');
-    const btnMax = document.getElementById('btnMax');
+    const sliderValueBubble = document.getElementById('sliderValueBubble');
+    const btnDefault = document.getElementById('btnDefault');
+    const randomizerRow = document.getElementById('randomizerRow');
+    const btnDefaultAll = document.getElementById('btnDefaultAll');
     const btnRandomize = document.getElementById('btnRandomize');
-    const randomizeRow = document.getElementById('randomizeRow');
     const btnAnim = document.getElementById('btnAnim');
     const btnCam = document.getElementById('btnCam');
     const btnOrbit = document.getElementById('btnOrbit');
 
     let uiControls = [];
-    let uiSelectedKey = null; // "type:id"
-    let uiMoveTest = false;
+    let uiSelectedKey = null;
+    let uiAnimOn = true;
     let uiFaceCam = false;
     let uiOrbit = false;
+    let uiCategoryId = null;
+    let panelHeightLocked = false;
 
     function controlKey(c) {
       return `${c.type}:${c.id}`;
@@ -12451,44 +14557,262 @@
       return uiControls.find((c) => controlKey(c) === uiSelectedKey) || null;
     }
 
-    function valueHint(c) {
-      if (!c) return '';
-      if (c.type === 'genderPair') {
-        return '0 feminine <- -> 1 masculine - sets face + body';
-      }
-      if (c.type === 'form') {
-        return `${c.formBone || 'CTRL'} - ${c.positiveLabel || ''}`.trim();
-      }
-      if (c.type === 'iris') {
-        const hex = `#${irisColorFromHue(c.value ?? irisHue).getHexString()}`;
-        return `0...1 hue - pupil black - ${hex}`;
-      }
-      if (c.type === 'bone') {
-        return c.scaleSpan ? `-1...1 - ${c.scaleSpan}` : '-1...1';
-      }
-      if (c.min >= 0) return `0...1 - ${c.positiveLabel || '+'}`;
-      return `${c.negativeLabel || '-'} <- -> ${c.positiveLabel || '+'}`;
+    function tileLabel(c) {
+      return c?.label || '-';
     }
 
-    function refreshValueLabel() {
-      const c = selectedControl();
-      if (!c) {
-        ctrlValueEl.textContent = '-';
-        ctrlHintEl.textContent = '';
+    function fmtParam(v) {
+      const n = +v;
+      if (!Number.isFinite(n)) return '-';
+      return Math.abs(n) >= 10 ? n.toFixed(1) : n.toFixed(2);
+    }
+
+    function getChoiceDefForCategory(catId) {
+      const cat = MORPH_CATEGORIES.find((c) => c.id === catId);
+      return cat?.controls?.find((c) => c.type === 'choice') || null;
+    }
+
+    function controlsForTiles(categoryId) {
+      const all = window.sandboxListMorphControls?.(categoryId) || [];
+      if (OPTION_TILE_CATEGORIES.has(categoryId)) {
+        return all.filter((c) => c.type !== 'choice' && c.type !== 'outfitHue');
+      }
+      return all;
+    }
+
+    function parkRandomizerButtons() {
+      if (randomizerRow && btnDefaultAll) randomizerRow.appendChild(btnDefaultAll);
+      if (randomizerRow && btnRandomize) randomizerRow.appendChild(btnRandomize);
+    }
+
+    function controlDefaultValue(c) {
+      if (!c) return 0;
+      if (c.type === 'genderPair') return 0.5;
+      if (c.type === 'iris') return 0.58;
+      if (c.type === 'outfitHue') return 0.5;
+      if (c.type === 'skinParam') {
+        const def = MORPH_CATEGORIES.flatMap((cat) => cat.controls).find((x) => x.id === c.id);
+        return def?.defaultValue ?? 0;
+      }
+      if (c.type === 'choice') {
+        const def = findChoiceControl(c.id)?.defaultValue ?? c.defaultValue;
+        return choiceIndex(c, def);
+      }
+      if (c.defaultValue != null) return c.defaultValue;
+      const min = c.min ?? -1;
+      const max = c.max ?? 1;
+      return min < 0 && max > 0 ? 0 : (min + max) / 2;
+    }
+
+    function appendControlTile(c, span = 1) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = `ctrl-tile${span === 2 ? ' span-2' : ''}`;
+      btn.dataset.key = controlKey(c);
+      btn.textContent = tileLabel(c);
+      if (controlKey(c) === uiSelectedKey) btn.classList.add('active');
+      btn.addEventListener('click', () => {
+        uiSelectedKey = controlKey(c);
+        onControlPicked();
+      });
+      ctrlTileGrid.appendChild(btn);
+    }
+
+    function positionCardBubble(wrap, input, bubble, show) {
+      if (!wrap || !input || !bubble) return;
+      if (!show) {
+        bubble.style.opacity = '0';
         return;
       }
-      const v = +ctrlSlider.value;
-      ctrlValueEl.textContent = `${controlLabel(c)} = ${v.toFixed(2)}`;
-      ctrlHintEl.textContent = valueHint(c);
+      const min = +input.min;
+      const max = +input.max;
+      const val = +input.value;
+      const pct = max > min ? (val - min) / (max - min) : 0;
+      bubble.textContent = fmtParam(val);
+      const wrapW = wrap.clientWidth || 1;
+      const bubbleW = bubble.offsetWidth || 28;
+      let leftPx = pct * wrapW;
+      leftPx = Math.max(bubbleW * 0.5, Math.min(wrapW - bubbleW * 0.5, leftPx));
+      bubble.style.left = `${leftPx}px`;
+      bubble.style.opacity = '1';
     }
 
-    function applyUiValue(v, { fromSlider = false } = {}) {
-      const c = selectedControl();
+    function appendSliderCard(c) {
+      const card = document.createElement('div');
+      card.className = 'slider-card';
+      card.dataset.key = controlKey(c);
+      const title = document.createElement('div');
+      title.className = 'card-title';
+      title.textContent = tileLabel(c);
+      const row = document.createElement('div');
+      row.className = 'slider-row';
+      const reset = document.createElement('button');
+      reset.type = 'button';
+      reset.className = 'btn-default';
+      reset.title = 'Restore default';
+      reset.setAttribute('aria-label', `Restore ${c.label}`);
+      reset.textContent = '↺';
+      const wrap = document.createElement('div');
+      wrap.className = 'slider-wrap';
+      const input = document.createElement('input');
+      input.type = 'range';
+      input.min = String(c.min ?? -1);
+      input.max = String(c.max ?? 1);
+      input.step = '0.01';
+      input.value = String(c.value ?? 0);
+      const bubble = document.createElement('div');
+      bubble.className = 'slider-val';
+      wrap.appendChild(input);
+      wrap.appendChild(bubble);
+      row.appendChild(reset);
+      row.appendChild(wrap);
+      card.appendChild(title);
+      card.appendChild(row);
+      reset.addEventListener('click', () => {
+        const d = controlDefaultValue(c);
+        input.value = String(d);
+        applyUiValue(d, { control: c });
+        positionCardBubble(wrap, input, bubble, false);
+      });
+      input.addEventListener('input', () => {
+        applyUiValue(input.value, { fromSlider: true, control: c });
+        positionCardBubble(wrap, input, bubble, true);
+      });
+      input.addEventListener('pointerdown', () => {
+        wrap.classList.add('dragging');
+        if (c.type === 'skinParam') onSkinSliderDragStart();
+        positionCardBubble(wrap, input, bubble, true);
+      });
+      const endDrag = () => {
+        wrap.classList.remove('dragging');
+        if (c.type === 'skinParam') onSkinSliderDragEnd();
+        positionCardBubble(wrap, input, bubble, false);
+      };
+      input.addEventListener('pointerup', endDrag);
+      input.addEventListener('pointercancel', endDrag);
+      ctrlTileGrid.appendChild(card);
+    }
+
+    function buildCtrlTiles() {
+      if (!ctrlTileGrid) return;
+      parkRandomizerButtons();
+      ctrlTileGrid.innerHTML = '';
+      if (uiCategoryId === 'presets') return;
+
+      if (uiCategoryId === 'randomizer') {
+        const gender = uiControls.find((c) => c.type === 'genderPair') || uiControls[0];
+        if (gender) {
+          appendSliderCard({
+            type: 'genderPair',
+            id: gender.id,
+            label: gender.label,
+            value: gender.value ?? 0.5,
+            min: gender.min ?? 0,
+            max: gender.max ?? 1,
+          });
+        }
+        if (btnDefaultAll) ctrlTileGrid.appendChild(btnDefaultAll);
+        if (btnRandomize) ctrlTileGrid.appendChild(btnRandomize);
+        return;
+      }
+
+      if (OPTION_TILE_CATEGORIES.has(uiCategoryId)) {
+        const choiceDef = getChoiceDefForCategory(uiCategoryId);
+        if (!choiceDef) return;
+        for (const o of (choiceDef.options || [])) {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'ctrl-tile';
+          btn.textContent = o.label || o.value;
+          if (texChoiceValues[choiceDef.id] === o.value) btn.classList.add('active');
+          btn.addEventListener('click', async () => {
+            await window.sandboxSetTexChoice?.(choiceDef.id, o.value);
+            buildCtrlTiles();
+            updateEditorVisibility();
+          });
+          ctrlTileGrid.appendChild(btn);
+        }
+        if (uiCategoryId === 'eyeStyle') {
+          appendSliderCard({
+            type: 'iris',
+            id: 'irisHue',
+            label: 'Eye color',
+            value: irisHue,
+            min: 0,
+            max: 1,
+          });
+        }
+        if (uiCategoryId === 'outfit' && texChoiceValues.underwear !== 'none') {
+          appendSliderCard({
+            type: 'outfitHue',
+            id: 'underwearHue',
+            label: 'Outfit color',
+            value: underwearHue,
+            min: 0,
+            max: 1,
+          });
+        }
+        return;
+      }
+
+      if (INLINE_SLIDER_CATEGORIES.has(uiCategoryId)) {
+        for (const c of uiControls) appendSliderCard(c);
+        return;
+      }
+
+      for (const c of uiControls) {
+        appendControlTile(c, c.type === 'genderPair' ? 2 : 1);
+      }
+    }
+
+    function configureSlider(c) {
+      if (!c || !ctrlSlider) return;
+      ctrlSlider.min = String(c.min ?? -1);
+      ctrlSlider.max = String(c.max ?? 1);
+      ctrlSlider.step = '0.01';
+      ctrlSlider.value = String(c.value ?? 0);
+      updateSliderBubble(false);
+    }
+
+    function activeSliderControl() {
+      if (
+        INLINE_SLIDER_CATEGORIES.has(uiCategoryId)
+        || uiCategoryId === 'eyeStyle'
+        || uiCategoryId === 'outfit'
+        || uiCategoryId === 'randomizer'
+      ) return null;
+      const morph = selectedControl();
+      if (morph && morph.type !== 'choice') return morph;
+      return null;
+    }
+
+    function updateSliderBubble(show = sliderWrap?.classList.contains('dragging')) {
+      if (!sliderValueBubble || !ctrlSlider || !sliderWrap) return;
+      const c = activeSliderControl();
+      if (!show || !c || c.type === 'choice') {
+        sliderValueBubble.style.opacity = '0';
+        return;
+      }
+      const min = +ctrlSlider.min;
+      const max = +ctrlSlider.max;
+      const val = +ctrlSlider.value;
+      const pct = max > min ? (val - min) / (max - min) : 0;
+      sliderValueBubble.textContent = fmtParam(val);
+      const wrapW = sliderWrap.clientWidth || 1;
+      const bubbleW = sliderValueBubble.offsetWidth || 28;
+      let leftPx = pct * wrapW;
+      leftPx = Math.max(bubbleW * 0.5, Math.min(wrapW - bubbleW * 0.5, leftPx));
+      sliderValueBubble.style.left = `${leftPx}px`;
+      sliderValueBubble.style.opacity = '1';
+    }
+
+    function applyUiValue(v, { fromSlider = false, control = null } = {}) {
+      const c = control || activeSliderControl();
       if (!c) return;
       const min = c.min ?? -1;
       const max = c.max ?? 1;
       const t = Math.max(min, Math.min(max, +v));
-      if (!fromSlider) ctrlSlider.value = String(t);
+      if (c.type !== 'choice' && !fromSlider) ctrlSlider.value = String(t);
       if (c.type === 'bone') {
         if (c.id === 'height') window.sandboxSetHeight(t);
         else if (c.id === 'headSize') window.sandboxSetHeadSize(t);
@@ -12497,143 +14821,247 @@
         window.sandboxSetFormCtrl(c.id, t);
       } else if (c.type === 'iris') {
         window.sandboxSetIrisHue?.(t);
+        c.value = t;
+      } else if (c.type === 'outfitHue') {
+        window.sandboxSetUnderwearHue?.(t);
+        c.value = t;
+      } else if (c.type === 'skinParam') {
+        window.sandboxSetSkinParam?.(c.id, t);
+      } else if (c.type === 'choice') {
+        const val = typeof v === 'string' ? v : choiceValueAt(c, t);
+        window.sandboxSetTexChoice?.(c.id, val);
+        c.choiceValue = val;
+        c.value = choiceIndex(c, val);
       } else if (c.type === 'genderPair') {
         window.sandboxSetGenderExpression?.(t);
       } else if (c.type === 'axis') {
         window.sandboxSetShapeAxis(c.id, t);
       }
-      c.value = t;
-      refreshValueLabel();
+      if (c.type !== 'choice' && c.type !== 'iris' && c.type !== 'outfitHue') c.value = t;
+      updateSliderBubble();
     }
 
-    function fillControls(categoryId) {
-      uiControls = window.sandboxListMorphControls?.(categoryId) || [];
-      const isRandomizer = categoryId === 'randomizer';
-      if (ctrlSelectRow) ctrlSelectRow.style.display = isRandomizer ? 'none' : '';
-      if (randomizeRow) randomizeRow.style.display = '';
-      ctrlSelect.innerHTML = '';
-      for (const c of uiControls) {
-        const opt = document.createElement('option');
-        opt.value = controlKey(c);
-        opt.textContent = controlLabel(c);
-        ctrlSelect.appendChild(opt);
+    function updateEditorVisibility() {
+      const isPresets = uiCategoryId === 'presets';
+      const sliderC = activeSliderControl();
+      if (randomizerRow) randomizerRow.style.display = 'none';
+      if (tileScrollBox) {
+        tileScrollBox.style.display = isPresets ? 'none' : '';
+        tileScrollBox.classList.toggle(
+          'dense',
+          INLINE_SLIDER_CATEGORIES.has(uiCategoryId)
+            || uiCategoryId === 'eyeStyle'
+            || uiCategoryId === 'outfit'
+            || uiCategoryId === 'randomizer',
+        );
       }
-      if (!uiControls.length) {
-        uiSelectedKey = null;
-        ctrlSlider.disabled = true;
-        refreshValueLabel();
+      if (catPlaceholder) {
+        catPlaceholder.style.display = isPresets ? '' : 'none';
+        catPlaceholder.textContent = isPresets
+          ? 'Presets coming soon — save and load character looks here.'
+          : '';
+      }
+      if (sliderRow) sliderRow.style.display = sliderC ? '' : 'none';
+      if (sliderC) configureSlider(sliderC);
+    }
+
+    function onControlPicked() {
+      buildCtrlTiles();
+      const c = selectedControl();
+      if (!c) {
+        updateEditorVisibility();
         onMorphControlSelected(null);
         return;
       }
+      onMorphControlSelected(c.anim || null);
+      updateEditorVisibility();
+    }
+
+    async function fillControls(categoryId) {
+      const prev = uiCategoryId;
+      if (panelHeightLocked && prev && prev !== categoryId && texturePreviewMode) {
+        await commitTextureFullQuality();
+      }
+      uiCategoryId = categoryId;
+      if (uiCategoryId === 'presets') {
+        uiControls = [];
+        uiSelectedKey = null;
+        buildCtrlTiles();
+        updateEditorVisibility();
+        onMorphControlSelected(null);
+        return;
+      }
+
+      uiControls = controlsForTiles(categoryId);
+
+      if (OPTION_TILE_CATEGORIES.has(categoryId)) {
+        uiSelectedKey = null;
+        buildCtrlTiles();
+        updateEditorVisibility();
+        onMorphControlSelected(null);
+        return;
+      }
+
+      if (INLINE_SLIDER_CATEGORIES.has(uiCategoryId) || uiCategoryId === 'randomizer') {
+        uiSelectedKey = null;
+        buildCtrlTiles();
+        updateEditorVisibility();
+        onMorphControlSelected(null);
+        return;
+      }
+
+      if (!uiControls.length) {
+        uiSelectedKey = null;
+        buildCtrlTiles();
+        updateEditorVisibility();
+        onMorphControlSelected(null);
+        return;
+      }
+
       const prefer = uiControls.find((c) => c.type === 'genderPair')
         || uiControls.find((c) => c.id === 'face_gender_expression' || c.id === 'body_gender_expression')
         || uiControls.find((c) => c.id === 'height')
         || uiControls[0];
       uiSelectedKey = controlKey(prefer);
-      ctrlSelect.value = uiSelectedKey;
       onControlPicked();
     }
 
-    function onControlPicked() {
-      uiSelectedKey = ctrlSelect.value || null;
-      const c = selectedControl();
-      if (!c) {
-        ctrlSlider.disabled = true;
-        refreshValueLabel();
-        onMorphControlSelected(null);
-        return;
-      }
-      ctrlSlider.disabled = false;
-      ctrlSlider.min = String(c.min ?? -1);
-      ctrlSlider.max = String(c.max ?? 1);
-      ctrlSlider.step = '0.01';
-      ctrlSlider.value = String(c.value ?? (c.min >= 0 ? 0 : 0));
-      refreshValueLabel();
-      onMorphControlSelected(c.anim || null);
+    function allCategoryOptions() {
+      return [...catSelect.options];
     }
 
     function fillCategories() {
       const cats = window.sandboxListMorphCategories?.() || [];
       catSelect.innerHTML = '';
-      for (const cat of cats) {
-        const opt = document.createElement('option');
-        opt.value = cat.id;
-        opt.textContent = `${cat.label} (${cat.count})`;
-        catSelect.appendChild(opt);
+      for (const g of CATEGORY_GROUP_ORDER) {
+        const inGroup = cats.filter((c) => (c.group || 'ungrouped') === g.id);
+        if (!inGroup.length) continue;
+        const og = document.createElement('optgroup');
+        if (g.label) og.label = g.label;
+        for (const cat of inGroup) {
+          const opt = document.createElement('option');
+          opt.value = cat.id;
+          opt.textContent = cat.label;
+          og.appendChild(opt);
+        }
+        catSelect.appendChild(og);
       }
       if (cats.length) {
-        const preferCat = cats.find((c) => c.id === 'randomizer')
-          || cats.find((c) => c.id === 'eyes')
-          || cats.find((c) => c.id === 'bodyBones')
-          || cats[0];
+        const preferCat = cats.find((c) => c.id === 'randomizer') || cats[0];
         catSelect.value = preferCat.id;
         fillControls(preferCat.id);
       }
     }
 
+    function cycleCategory(delta) {
+      const opts = allCategoryOptions();
+      if (!opts.length) return;
+      let i = opts.findIndex((o) => o.value === catSelect.value);
+      if (i < 0) i = 0;
+      i = (i + delta + opts.length) % opts.length;
+      catSelect.value = opts[i].value;
+      fillControls(catSelect.value);
+    }
+
+    function lockPanelHeightFromEyes() {
+      if (panelHeightLocked || !morphPanel) return;
+      const prev = catSelect?.value || 'randomizer';
+      fillControls('bodyColor');
+      requestAnimationFrame(() => {
+        morphPanel.style.setProperty('--panel-h', `${morphPanel.offsetHeight}px`);
+        panelHeightLocked = true;
+        fillControls(prev);
+      });
+    }
+
+    function setUtilTile(btn, key, value, active) {
+      if (!btn) return;
+      btn.innerHTML = `<span class="util-k">${key}</span><span class="util-v">${value}</span>`;
+      btn.classList.toggle('active', !!active);
+    }
+
     function wireMorphUi() {
       morphPanel.classList.add('visible');
+      const texHintBtn = document.getElementById('texHintBtn');
+      const texHintPop = document.getElementById('texHintPop');
+      const texHintYes = document.getElementById('texHintYes');
+      const closeTexHintPop = () => {
+        if (texHintPop) texHintPop.hidden = true;
+        texHintBtn?.setAttribute('aria-expanded', 'false');
+      };
+      texHintBtn?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (!texHintPop) return;
+        const open = texHintPop.hidden;
+        texHintPop.hidden = !open;
+        texHintBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      });
+      texHintPop?.addEventListener('click', (e) => e.stopPropagation());
+      texHintYes?.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        closeTexHintPop();
+        await commitTextureFullQuality();
+      });
+      document.addEventListener('click', closeTexHintPop);
       catSelect.addEventListener('change', () => fillControls(catSelect.value));
-      ctrlSelect.addEventListener('change', onControlPicked);
-      ctrlSlider.addEventListener('input', () => applyUiValue(ctrlSlider.value, { fromSlider: true }));
-      btnMin.addEventListener('click', () => {
-        const c = selectedControl();
-        if (c) applyUiValue(c.min ?? -1);
+      catPrev?.addEventListener('click', () => cycleCategory(-1));
+      catNext?.addEventListener('click', () => cycleCategory(1));
+      ctrlSlider.addEventListener('input', () => {
+        applyUiValue(ctrlSlider.value, { fromSlider: true });
+        updateSliderBubble(true);
       });
-      btnMid.addEventListener('click', () => {
-        const c = selectedControl();
+      ctrlSlider.addEventListener('pointerdown', () => {
+        sliderWrap?.classList.add('dragging');
+        const c = activeSliderControl();
+        if (c?.type === 'skinParam') onSkinSliderDragStart();
+        updateSliderBubble(true);
+      });
+      const endSkinDrag = () => {
+        sliderWrap?.classList.remove('dragging');
+        const c = activeSliderControl();
+        if (c?.type === 'skinParam') onSkinSliderDragEnd();
+        updateSliderBubble(false);
+      };
+      ctrlSlider.addEventListener('pointerup', endSkinDrag);
+      ctrlSlider.addEventListener('pointercancel', endSkinDrag);
+      btnDefault?.addEventListener('click', () => {
+        const c = activeSliderControl();
         if (!c) return;
-        if (c.type === 'iris') {
-          applyUiValue(0.58);
-          return;
-        }
-        if (c.type === 'genderPair') {
-          applyUiValue(0.5);
-          return;
-        }
-        const min = c.min ?? -1;
-        const max = c.max ?? 1;
-        applyUiValue((min + max) / 2);
+        applyUiValue(controlDefaultValue(c), { control: c });
       });
-      btnMax.addEventListener('click', () => {
-        const c = selectedControl();
-        if (c) applyUiValue(c.max ?? 1);
+      btnDefaultAll?.addEventListener('click', async () => {
+        const r = await window.sandboxRestoreDefaults?.();
+        fillControls(uiCategoryId || 'randomizer');
+        if (r?.ok) statusEl.textContent = 'Restored defaults';
       });
       btnRandomize?.addEventListener('click', () => {
         const g = selectedControl()?.type === 'genderPair'
           ? +ctrlSlider.value
           : window.sandboxGetGenderExpression?.();
         const r = window.sandboxRandomize?.(g);
-        // Refresh gender slider readout after roll
-        const c = selectedControl();
-        if (c?.type === 'genderPair') {
-          c.value = getGenderExpression();
-          ctrlSlider.value = String(c.value);
-          refreshValueLabel();
-        }
+        fillControls(uiCategoryId || 'randomizer');
         if (r?.ok) {
-          statusEl.textContent = `Randomized ${r.count} controls - gender ${(+r.gender).toFixed(2)}`;
+          statusEl.textContent = `Randomized ${r.count} controls — gender ${(+r.gender).toFixed(2)}`;
         }
       });
       btnAnim.addEventListener('click', () => {
-        uiMoveTest = !uiMoveTest;
-        window.sandboxSetMoveTest?.(uiMoveTest);
-        btnAnim.textContent = uiMoveTest ? 'Anim: move test' : 'Anim: Idle';
-        btnAnim.classList.toggle('active', uiMoveTest);
+        uiAnimOn = !uiAnimOn;
+        window.sandboxSetAnimDrivers?.(uiAnimOn);
+        setUtilTile(btnAnim, 'Animation', uiAnimOn ? 'ON' : 'OFF', uiAnimOn);
       });
       btnCam.addEventListener('click', () => {
         uiFaceCam = !uiFaceCam;
         window.sandboxSetCameraFraming?.(uiFaceCam ? 'face' : 'body');
-        btnCam.textContent = uiFaceCam ? 'Camera: Face' : 'Camera: Body';
-        btnCam.classList.toggle('active', uiFaceCam);
+        setUtilTile(btnCam, 'Camera', uiFaceCam ? 'Face' : 'Body', uiFaceCam);
       });
       btnOrbit.addEventListener('click', () => {
         uiOrbit = !uiOrbit;
+        if (uiOrbit) syncOrbitTargetToCharacter();
         window.sandboxSetFixedCamera?.(!uiOrbit);
-        btnOrbit.textContent = uiOrbit ? 'Orbit: On' : 'Orbit: Off';
-        btnOrbit.classList.toggle('active', uiOrbit);
+        setUtilTile(btnOrbit, 'Lock Camera', uiOrbit ? 'OFF' : 'ON', !uiOrbit);
       });
       fillCategories();
+      lockPanelHeightFromEyes();
     }
 
     async function modelAvailable(url) {
@@ -12656,15 +15084,17 @@
       statusEl.textContent = 'Loading model...';
       try {
         await loadGlbFromUrl(DEFAULT_MODEL_URL);
-        window.sandboxSetClarity?.(true);
         window.sandboxViewFront?.();
         window.sandboxSetFixedCamera?.(true);
         window.sandboxPlayLoopAnim?.();
         wireMorphUi();
+        hideLoadOverlay();
         statusEl.textContent = 'Ready - browser concept viewer';
       } catch (err) {
         console.error(err);
         statusEl.textContent = `Load failed: ${err?.message || err}`;
+        const t = document.getElementById('loadOverlayText');
+        if (t) t.textContent = `Load failed: ${err?.message || err}`;
       }
     }
 
