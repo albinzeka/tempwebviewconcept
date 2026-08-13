@@ -1449,28 +1449,28 @@
     ];
     const RANDOMIZE_SKIP_CATS = new Set([
       'randomizer', 'presets', 'eyeStyle', 'eyebrowsTex', 'makeupTex',
-      'faceOverlay', 'bodyColor', 'bodyColorPresets', 'bodyArt', 'outfit',
+      'faceOverlay', 'bodyColor', 'bodyArt', 'outfit',
     ]);
     const TEXTURE_CATEGORY_IDS = new Set([
       'eyeStyle', 'eyebrowsTex', 'makeupTex', 'faceOverlay',
-      'bodyColor', 'bodyColorPresets', 'bodyArt', 'outfit',
+      'bodyColor', 'bodyArt', 'outfit',
     ]);
     /** Choice-only categories: options render as tiles (not a separate Option row). */
     const OPTION_TILE_CATEGORIES = new Set([
       'eyeStyle', 'eyebrowsTex', 'faceOverlay', 'makeupTex',
-      'bodyColorPresets', 'bodyArt', 'outfit',
+      'bodyColor', 'bodyArt', 'outfit',
     ]);
     /** Bone / shapekey / color sliders listed in the tile box (Body color style). */
     const INLINE_SLIDER_CATEGORIES = new Set([
       'headShapes', 'eyes', 'brows', 'jaw', 'mouth', 'nose', 'ears', 'specials',
-      'bodyBones', 'bodyShapes', 'bodyColor',
+      'bodyBones', 'bodyShapes',
     ]);
     const HIDDEN_CATEGORIES = new Set(['presets']);
     const CATEGORY_DISPLAY_ORDER = [
       'randomizer',
       'headShapes', 'eyes', 'eyeStyle', 'eyebrowsTex', 'brows', 'jaw', 'mouth', 'nose', 'ears',
       'makeupTex', 'faceOverlay', 'specials',
-      'bodyBones', 'bodyShapes', 'bodyColor', 'bodyColorPresets', 'bodyArt', 'outfit',
+      'bodyBones', 'bodyShapes', 'bodyColor', 'bodyArt', 'outfit',
     ];
     const MORPH_CATEGORIES = [
       {
@@ -1538,30 +1538,22 @@
         label: 'Body color',
         group: 'body',
         controls: [
+          {
+            type: 'choice',
+            id: 'skinTone',
+            label: 'Skin tone',
+            options: [
+              { value: 'caucasian', label: 'Caucasian' },
+              { value: 'black', label: 'Black' },
+            ],
+            defaultValue: 'caucasian',
+          },
           { type: 'skinParam', id: 'skinDepth', label: 'Skin depth', min: 0, max: 1, defaultValue: 0.28 },
           { type: 'skinParam', id: 'skinWarmth', label: 'Warmth', min: -1, max: 1, defaultValue: 0 },
           { type: 'skinParam', id: 'skinRedness', label: 'Redness', min: -1, max: 1, defaultValue: 0 },
           { type: 'skinParam', id: 'skinSaturation', label: 'Saturation', min: 0, max: 1.5, defaultValue: 1 },
           { type: 'skinParam', id: 'lipPink', label: 'Lip pink', min: 0, max: 1, defaultValue: 0.55 },
           { type: 'skinParam', id: 'lipStrength', label: 'Lip strength', min: 0, max: 1, defaultValue: 0.75 },
-        ],
-      },
-      {
-        id: 'bodyColorPresets',
-        label: 'Body color presets',
-        group: 'body',
-        controls: [
-          {
-            type: 'choice',
-            id: 'skinTone',
-            label: 'Body color preset',
-            options: [
-              { value: 'white', label: 'Custom' },
-              { value: 'caucasian', label: 'Caucasian' },
-              { value: 'black', label: 'Black' },
-            ],
-            defaultValue: 'white',
-          },
         ],
       },
       {
@@ -2349,7 +2341,7 @@
         lipPink: 0.55,
         lipStrength: 0.75,
       });
-      texChoiceValues.skinTone = 'white';
+      texChoiceValues.skinTone = 'caucasian';
       irisHue = 0.58;
       for (const cat of MORPH_CATEGORIES) {
         for (const c of cat.controls) {
@@ -12121,7 +12113,7 @@
     const HEAD_TEX_CHOICES = new Set(['makeup', 'faceExtra', 'eyebrow', 'skinTone']);
     const BODY_TEX_CHOICES = new Set(['bodyExtra', 'underwear', 'skinTone']);
     const texChoiceValues = {
-      skinTone: 'white',
+      skinTone: 'caucasian',
       eyeStyle: 'toon',
       eyebrow: 'EYEBROWS_1.png',
       makeup: 'NULL.png',
@@ -12833,10 +12825,10 @@
     }
 
     async function ensureSkinBakeCache({ previewOnly = false } = {}) {
-      const tone = texChoiceValues.skinTone || 'white';
-      const skin = SKIN_DIFFUSE[tone] || SKIN_DIFFUSE.white;
+      const tone = texChoiceValues.skinTone || 'caucasian';
+      const skin = SKIN_DIFFUSE[tone] || SKIN_DIFFUSE.caucasian;
       if (skinBakeCache && skinBakeCache.tone !== tone) invalidateSkinBakeCache();
-      const storeOklch = tone !== 'white';
+      const storeOklch = true;
       const hKey = headOverlayKey();
       const bKey = bodyOverlayKey();
 
@@ -14173,7 +14165,7 @@
             max: c.max ?? 1,
             anim: null,
             positiveLabel: 'OKLCH',
-            negativeLabel: 'Custom White',
+            negativeLabel: 'Skin tone',
           });
         } else if (c.type === 'choice') {
           const opts = c.options || [];
@@ -15021,6 +15013,11 @@
             max: 1,
           });
         }
+        if (uiCategoryId === 'bodyColor') {
+          for (const c of uiControls) {
+            if (c.type === 'skinParam') appendSliderCard(c);
+          }
+        }
         if (uiCategoryId === 'outfit' && texChoiceValues.underwear !== 'none') {
           appendSliderCard({
             type: 'outfitHue',
@@ -15058,6 +15055,7 @@
         INLINE_SLIDER_CATEGORIES.has(uiCategoryId)
         || uiCategoryId === 'eyeStyle'
         || uiCategoryId === 'outfit'
+        || uiCategoryId === 'bodyColor'
         || uiCategoryId === 'randomizer'
       ) return null;
       const morph = selectedControl();
@@ -15131,6 +15129,7 @@
           INLINE_SLIDER_CATEGORIES.has(uiCategoryId)
             || uiCategoryId === 'eyeStyle'
             || uiCategoryId === 'outfit'
+            || uiCategoryId === 'bodyColor'
             || uiCategoryId === 'randomizer',
         );
       }
