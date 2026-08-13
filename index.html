@@ -61,19 +61,49 @@
     #morphPanel.visible { display: flex; }
     #morphPanel .panel-header { flex: 0 0 auto; margin-bottom: 8px; padding-right: 28px; }
     #morphPanel .panel-header label[for="catSelect"] { display: none; }
+    #panelSheetHandle {
+      display: none;
+      flex: 0 0 auto;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      height: 18px;
+      margin: -2px 0 2px;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      cursor: ns-resize;
+      touch-action: none;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    #panelSheetHandle::before {
+      content: '';
+      width: 42px;
+      height: 4px;
+      border-radius: 999px;
+      background: #5a5e6c;
+    }
+    #panelSheetHandle:active::before,
+    #panelSheetHandle.dragging::before { background: #8ab4ff; }
     /* Phone / portrait: bottom sheet — character stays visible above */
     @media (max-width: 720px), ((orientation: portrait) and (max-height: 980px)) {
+      #panelSheetHandle { display: flex; }
       #morphPanel {
         left: 0;
         right: 0;
         bottom: 0;
         width: 100%;
         max-width: none;
-        height: auto !important;
-        max-height: min(38dvh, 340px);
+        height: var(--sheet-h, 30dvh) !important;
+        max-height: var(--sheet-h, 30dvh);
         border-radius: 14px 14px 0 0;
-        padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px));
+        padding: 4px 8px calc(6px + env(safe-area-inset-bottom, 0px));
         box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.5);
+        transition: height 0.18s ease, max-height 0.18s ease;
+      }
+      #morphPanel.sheet-dragging {
+        transition: none;
       }
       #morphPanel .panel-header {
         margin-bottom: 4px;
@@ -131,7 +161,7 @@
       #texHint { top: 4px; right: 4px; }
       #morphPanel #texHintBtn { width: 20px; height: 20px; font-size: 12px; }
       #texHintPop { width: min(210px, calc(100vw - 24px)); top: 26px; }
-      #status { bottom: calc(38dvh + 8px); }
+      #status { bottom: calc(var(--sheet-h, 30dvh) + 8px); }
     }
     #texHint {
       position: absolute; top: 8px; right: 8px; z-index: 7;
@@ -195,6 +225,17 @@
       background: #24262f; color: #cfd2da; border: 1px solid #3a3d48;
       border-radius: 6px; padding: 6px 8px; font-size: 12px;
       cursor: pointer;
+    }
+    #morphPanel #panelSheetHandle {
+      width: 100%;
+      height: 18px;
+      padding: 0;
+      margin: -2px 0 2px;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      cursor: ns-resize;
+      color: inherit;
     }
     #morphPanel button.active { background: #3d6df0; border-color: #3d6df0; color: #fff; }
     #morphPanel .choiceCycle {
@@ -539,7 +580,8 @@
   </div>
   <div id="callouts"></div>
   <div id="status"></div>
-  <div id="morphPanel">
+  <div id="morphPanel" data-sheet-h="30" style="--sheet-h: 30dvh">
+    <button type="button" id="panelSheetHandle" aria-label="Resize panel. Drag or tap to switch between 20, 30, and 50 percent height." title="Drag or tap: 20% / 30% / 50%"></button>
     <div id="texHint">
       <button type="button" id="texHintBtn" aria-label="Texture quality help" aria-expanded="false">?</button>
       <div id="texHintPop" hidden>
@@ -11862,7 +11904,7 @@
 
     // -- Character preview textures (body / head / overlays / eyes) --
     // Bump when publishing so GitHub Pages / browser caches cannot keep an old GLB or PNG.
-    const ASSET_REV = '20260813w';
+    const ASSET_REV = '20260813x';
     const textureLoader = new THREE.TextureLoader();
     const TEX_URL = (file) => {
       const enc = String(file || '').split('/').map(encodeURIComponent).join('/');
@@ -15047,6 +15089,105 @@
       });
     }
 
+    const SHEET_HEIGHT_STEPS = [20, 30, 50];
+    const SHEET_HEIGHT_KEY = 'vqSheetHeightPct';
+
+    function nearestSheetStep(pct) {
+      let best = SHEET_HEIGHT_STEPS[0];
+      let bestDist = Infinity;
+      for (const step of SHEET_HEIGHT_STEPS) {
+        const d = Math.abs(step - pct);
+        if (d < bestDist) {
+          bestDist = d;
+          best = step;
+        }
+      }
+      return best;
+    }
+
+    function applySheetHeight(pct, { animate = true } = {}) {
+      if (!morphPanel) return;
+      const step = nearestSheetStep(+pct);
+      morphPanel.dataset.sheetH = String(step);
+      morphPanel.style.setProperty('--sheet-h', `${step}dvh`);
+      morphPanel.classList.toggle('sheet-dragging', !animate);
+      try { localStorage.setItem(SHEET_HEIGHT_KEY, String(step)); } catch (_) { /* ignore */ }
+      const handle = document.getElementById('panelSheetHandle');
+      if (handle) {
+        handle.setAttribute('aria-valuenow', String(step));
+        handle.title = `Panel height ${step}% — drag or tap for 20 / 30 / 50`;
+      }
+    }
+
+    function wirePanelSheetHandle() {
+      const handle = document.getElementById('panelSheetHandle');
+      if (!handle || !morphPanel || handle.dataset.wired === '1') return;
+      handle.dataset.wired = '1';
+      handle.setAttribute('role', 'slider');
+      handle.setAttribute('aria-valuemin', '20');
+      handle.setAttribute('aria-valuemax', '50');
+      let saved = 30;
+      try {
+        const raw = localStorage.getItem(SHEET_HEIGHT_KEY);
+        if (raw != null) saved = nearestSheetStep(+raw);
+      } catch (_) { /* ignore */ }
+      applySheetHeight(saved, { animate: false });
+
+      let dragging = false;
+      let moved = false;
+      let startY = 0;
+      let startPct = saved;
+      const viewportH = () => window.visualViewport?.height || window.innerHeight || 1;
+
+      const onMove = (e) => {
+        if (!dragging) return;
+        const y = e.clientY ?? e.touches?.[0]?.clientY;
+        if (y == null) return;
+        const dy = startY - y;
+        if (Math.abs(dy) > 4) moved = true;
+        const deltaPct = (dy / viewportH()) * 100;
+        const live = Math.max(20, Math.min(50, startPct + deltaPct));
+        morphPanel.classList.add('sheet-dragging');
+        handle.classList.add('dragging');
+        morphPanel.style.setProperty('--sheet-h', `${live.toFixed(1)}dvh`);
+        e.preventDefault?.();
+      };
+
+      const onEnd = (e) => {
+        if (!dragging) return;
+        dragging = false;
+        handle.classList.remove('dragging');
+        morphPanel.classList.remove('sheet-dragging');
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onEnd);
+        window.removeEventListener('pointercancel', onEnd);
+        const y = e.clientY ?? e.changedTouches?.[0]?.clientY;
+        if (!moved) {
+          const cur = nearestSheetStep(+(morphPanel.dataset.sheetH || 30));
+          const idx = SHEET_HEIGHT_STEPS.indexOf(cur);
+          const next = SHEET_HEIGHT_STEPS[(idx + 1) % SHEET_HEIGHT_STEPS.length];
+          applySheetHeight(next);
+          return;
+        }
+        const endY = y != null ? y : startY;
+        const deltaPct = ((startY - endY) / viewportH()) * 100;
+        applySheetHeight(startPct + deltaPct);
+      };
+
+      handle.addEventListener('pointerdown', (e) => {
+        if (e.button != null && e.button !== 0) return;
+        dragging = true;
+        moved = false;
+        startY = e.clientY;
+        startPct = nearestSheetStep(+(morphPanel.dataset.sheetH || 30));
+        handle.setPointerCapture?.(e.pointerId);
+        window.addEventListener('pointermove', onMove, { passive: false });
+        window.addEventListener('pointerup', onEnd);
+        window.addEventListener('pointercancel', onEnd);
+        e.preventDefault();
+      });
+    }
+
     function setUtilTile(btn, key, value, active) {
       if (!btn) return;
       btn.innerHTML = `<span class="util-k">${key}</span><span class="util-v">${value}</span>`;
@@ -15055,6 +15196,7 @@
 
     function wireMorphUi() {
       morphPanel.classList.add('visible');
+      wirePanelSheetHandle();
       const texHintBtn = document.getElementById('texHintBtn');
       const texHintPop = document.getElementById('texHintPop');
       const texHintYes = document.getElementById('texHintYes');
