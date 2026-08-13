@@ -60,6 +60,79 @@
     }
     #morphPanel.visible { display: flex; }
     #morphPanel .panel-header { flex: 0 0 auto; margin-bottom: 8px; padding-right: 28px; }
+    #morphPanel .panel-header label[for="catSelect"] { display: none; }
+    /* Phone / portrait: bottom sheet — character stays visible above */
+    @media (max-width: 720px), ((orientation: portrait) and (max-height: 980px)) {
+      #morphPanel {
+        left: 0;
+        right: 0;
+        bottom: 0;
+        width: 100%;
+        max-width: none;
+        height: auto !important;
+        max-height: min(38dvh, 340px);
+        border-radius: 14px 14px 0 0;
+        padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px));
+        box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.5);
+      }
+      #morphPanel .panel-header {
+        margin-bottom: 4px;
+        padding-right: 26px;
+      }
+      #morphPanel .panel-body { gap: 4px; }
+      #morphPanel .choiceCycle { gap: 4px; }
+      #morphPanel .choiceCycle button {
+        width: 32px;
+        padding: 5px 0;
+      }
+      #morphPanel select, #morphPanel button {
+        padding: 5px 6px;
+        font-size: 11px;
+        border-radius: 5px;
+      }
+      #morphPanel .tile-grid { gap: 4px; }
+      #tileScrollBox {
+        padding: 4px;
+        border-radius: 5px;
+      }
+      #tileScrollBox.dense { padding: 2px 4px; }
+      #tileScrollBox.dense .tile-grid { gap: 4px; }
+      #tileScrollBox.dense .slider-card { padding: 2px 1px 3px; }
+      #tileScrollBox.dense .slider-card .card-title {
+        font-size: 11px;
+        margin-bottom: 1px;
+      }
+      #tileScrollBox.dense .slider-card .slider-row {
+        grid-template-columns: 24px minmax(0, 1fr);
+        gap: 4px;
+      }
+      #tileScrollBox.dense .slider-card .btn-default {
+        width: 24px; height: 24px; font-size: 12px;
+      }
+      #tileScrollBox.dense .slider-card .slider-wrap { padding: 4px 0; }
+      #tileScrollBox.dense .slider-card .slider-wrap input[type="range"] { height: 22px; }
+      #morphPanel .ctrl-tile,
+      #morphPanel .util-tile {
+        min-height: 32px;
+        padding: 5px 4px;
+        font-size: 10px;
+      }
+      #morphPanel .util-tile {
+        min-height: 36px;
+        padding: 4px 2px;
+        gap: 1px;
+      }
+      #morphPanel .util-tile .util-k { font-size: 7px; }
+      #morphPanel .util-tile .util-v { font-size: 10px; }
+      #utilityTiles { gap: 4px; }
+      #morphPanel .panel-footer .tile-grid { margin-bottom: 4px; }
+      #morphPanel .slider-row { margin-bottom: 4px; gap: 6px; }
+      #morphPanel .btn-default { width: 32px; height: 32px; font-size: 14px; }
+      #texHint { top: 4px; right: 4px; }
+      #morphPanel #texHintBtn { width: 20px; height: 20px; font-size: 12px; }
+      #texHintPop { width: min(210px, calc(100vw - 24px)); top: 26px; }
+      #status { bottom: calc(38dvh + 8px); }
+    }
     #texHint {
       position: absolute; top: 8px; right: 8px; z-index: 7;
       width: auto;
@@ -480,7 +553,7 @@
         <label for="catSelect">Main category</label>
         <div class="choiceCycle cat-cycle">
           <button type="button" id="catPrev" aria-label="Previous category">◀</button>
-          <select id="catSelect"></select>
+          <select id="catSelect" aria-label="Main category"></select>
           <button type="button" id="catNext" aria-label="Next category">▶</button>
         </div>
       </div>
@@ -11789,7 +11862,7 @@
 
     // -- Character preview textures (body / head / overlays / eyes) --
     // Bump when publishing so GitHub Pages / browser caches cannot keep an old GLB or PNG.
-    const ASSET_REV = '20260813v';
+    const ASSET_REV = '20260813w';
     const textureLoader = new THREE.TextureLoader();
     const TEX_URL = (file) => {
       const enc = String(file || '').split('/').map(encodeURIComponent).join('/');
