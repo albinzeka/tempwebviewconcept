@@ -12012,7 +12012,7 @@
 
     // -- Character preview textures (body / head / overlays / eyes) --
     // Bump when publishing so GitHub Pages / browser caches cannot keep an old GLB or PNG.
-    const ASSET_REV = '20260814a';
+    const ASSET_REV = '20260814b';
     const textureLoader = new THREE.TextureLoader();
     const TEX_URL = (file) => {
       const enc = String(file || '').split('/').map(encodeURIComponent).join('/');
@@ -12092,7 +12092,6 @@
       { t: 1.00, L: 0.300, C: 0.060, H: 28 },
     ];
     const LIP_MASK_PATH = 'face/main/diffuse/Lip_Mask.png';
-    const SKIN_PREVIEW_MAX = 512;
     const isMobileSheetUi = () => window.matchMedia(
       '(max-width: 720px), ((orientation: portrait) and (max-height: 980px))',
     ).matches;
@@ -12103,6 +12102,10 @@
       } catch (_) { /* ignore */ }
       return false;
     };
+    /** Preview atlas size — higher = sharper brows/tattoos; keep below 4k to avoid Safari OOM. */
+    function skinPreviewMax() {
+      return prefersPreviewTextures() ? 1024 : 1536;
+    }
     let lipMaskAvailable = null; // null unknown, true/false after probe
     let characterTexturesOn = false;
     let texCache = {}; // cacheKey -> THREE.Texture
@@ -12488,7 +12491,13 @@
 
     async function loadOverlayPixelData(path, w, h, mode, { tintHue = null } = {}) {
       const tex = await loadTex(path);
-      const { ctx } = canvasFromImage(tex.image, w, h);
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(tex.image, 0, 0, w, h);
       const data = ctx.getImageData(0, 0, w, h).data;
       if (tintHue != null) tintOverlayDataByHue(data, tintHue);
       return { data, mode };
@@ -12816,7 +12825,7 @@
     }
 
     function previewSize(w, h) {
-      const s = Math.min(1, SKIN_PREVIEW_MAX / Math.max(w, h));
+      const s = Math.min(1, skinPreviewMax() / Math.max(w, h));
       return {
         w: Math.max(1, Math.round(w * s)),
         h: Math.max(1, Math.round(h * s)),
@@ -14936,17 +14945,20 @@
       card.appendChild(title);
       card.appendChild(row);
       reset.addEventListener('click', () => {
+        if (c.anim) onMorphControlSelected(c.anim);
         const d = controlDefaultValue(c);
         input.value = String(d);
         applyUiValue(d, { control: c });
         positionCardBubble(wrap, input, bubble, false);
       });
       input.addEventListener('input', () => {
+        if (c.anim) onMorphControlSelected(c.anim);
         applyUiValue(input.value, { fromSlider: true, control: c });
         positionCardBubble(wrap, input, bubble, true);
       });
       input.addEventListener('pointerdown', () => {
         wrap.classList.add('dragging');
+        if (c.anim) onMorphControlSelected(c.anim);
         if (c.type === 'skinParam') onSkinSliderDragStart();
         positionCardBubble(wrap, input, bubble, true);
       });
