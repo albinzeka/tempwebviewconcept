@@ -135,9 +135,8 @@
       min-height: 40px;
     }
     #utilityTilesFooter {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 6px;
+      display: block;
+      width: 100%;
     }
     #panelSheetHandle {
       display: none;
@@ -12013,7 +12012,7 @@
 
     // -- Character preview textures (body / head / overlays / eyes) --
     // Bump when publishing so GitHub Pages / browser caches cannot keep an old GLB or PNG.
-    const ASSET_REV = '20260813z';
+    const ASSET_REV = '20260814a';
     const textureLoader = new THREE.TextureLoader();
     const TEX_URL = (file) => {
       const enc = String(file || '').split('/').map(encodeURIComponent).join('/');
@@ -12505,6 +12504,11 @@
       if (faceExtra && faceExtra !== 'none') {
         out.push(await loadOverlayPixelData(`face/overlays/extra/${faceExtra}`, w, h, 'alpha'));
       }
+      // Brows in the preview/full stack so they show without a native 4k sharp pass.
+      const brow = texChoiceValues.eyebrow;
+      if (brow && brow !== 'none' && brow !== 'No Eyebrows.png') {
+        out.push(await loadOverlayPixelData(`face/overlays/eyebrows/${brow}`, w, h, 'whiteKey'));
+      }
       return out;
     }
 
@@ -12694,12 +12698,13 @@
       };
     }
 
-    function paintSkinTier(tier, p, { sharpOverlays = true } = {}) {
+    function paintSkinTier(tier, p, { sharpOverlays = false } = {}) {
       if (!tier) return;
       if (tier.bodyOklch) applyPresetOklchAdjust(tier.bodyOklch, tier.bodyOut.data, null, p);
       else applyOklchFromLuma(tier.bodyLuma, tier.bodyOut.data, null, p);
       compositeOverlayStack(tier.bodyOut, tier.bodyOverlays);
       tier.bodyCtx.putImageData(tier.bodyOut, 0, 0);
+      // Native 4k sharp overlays are optional and double-draw if stacks already include them.
       if (sharpOverlays) compositeNativeBodyOverlays(tier, skinBakeCache?.bodyAlphas);
 
       if (tier.headOklch) applyPresetOklchAdjust(tier.headOklch, tier.headOut.data, tier.lipMaskLuma, p);
@@ -12714,17 +12719,16 @@
 
     function pushSkinTexturesToMaterials(tier, parts = { body: true, head: true }, { preview = false } = {}) {
       if (!tier) return;
+      // Overlays (brows / body art / outfit) live in the painted tier canvases now.
       if (parts.body !== false) {
-        const bodyMap = preview ? tier.bodyTex : (tier.bodySharpTex || tier.bodyTex);
         for (const mat of bodyMatRefs) {
-          mat.map = bodyMap;
+          mat.map = tier.bodyTex;
           mat.needsUpdate = true;
         }
       }
       if (parts.head !== false) {
-        const headMap = preview ? tier.headTex : (tier.headSharpTex || tier.headTex);
         for (const mat of headMatRefs) {
-          mat.map = headMap;
+          mat.map = tier.headTex;
           mat.needsUpdate = true;
         }
       }
@@ -12807,9 +12811,8 @@
       beginTexturePreview();
       const tier = skinBakeCache?.preview;
       if (!tier) return;
-      const sharp = !prefersPreviewTextures();
-      paintSkinTier(tier, skinParams, { sharpOverlays: sharp });
-      pushSkinTexturesToMaterials(tier, previewDirty, { preview: !sharp });
+      paintSkinTier(tier, skinParams, { sharpOverlays: false });
+      pushSkinTexturesToMaterials(tier, previewDirty, { preview: true });
     }
 
     function previewSize(w, h) {
@@ -12850,10 +12853,9 @@
       const ph = previewSize(hw, hh);
 
       if (!skinBakeCache?.preview) {
-        const [headOverlaysPrev, browAlpha, bodyAlphas] = await Promise.all([
+        const [headOverlaysPrev, bodyOverlaysPrev] = await Promise.all([
           loadHeadOverlayStack(ph.w, ph.h),
-          loadEyebrowAlphaCanvas(),
-          loadBodyOverlayAlphaCanvases(),
+          loadBodyOverlayStack(pb.w, pb.h),
         ]);
         const bodyPrevCanvas = document.createElement('canvas');
         bodyPrevCanvas.width = pb.w;
@@ -12873,47 +12875,47 @@
         }
         const preview = makeSkinTierFromSource(
           bodyPrevCanvas, headPrevCanvas, lipPrevImg,
-          [], headOverlaysPrev, pb.w, pb.h, ph.w, ph.h, { storeOklch },
+          bodyOverlaysPrev, headOverlaysPrev, pb.w, pb.h, ph.w, ph.h, { storeOklch },
         );
         skinBakeCache = {
-          ready: true, tone, headKey: hKey, bodyKey: bKey, full: null, preview, browAlpha, bodyAlphas,
+          ready: true, tone, headKey: hKey, bodyKey: bKey, full: null, preview,
+          browAlpha: null, bodyAlphas: null,
         };
       } else {
         if (skinBakeCache.headKey !== hKey) {
-          const [headOverlaysPrev, browAlpha] = await Promise.all([
-            loadHeadOverlayStack(skinBakeCache.preview.hw, skinBakeCache.preview.hh),
-            loadEyebrowAlphaCanvas(),
-          ]);
-          skinBakeCache.browAlpha = browAlpha;
+          const headOverlaysPrev = await loadHeadOverlayStack(skinBakeCache.preview.hw, skinBakeCache.preview.hh);
           skinBakeCache.preview.headOverlays = headOverlaysPrev;
           skinBakeCache.preview.headSharp = null;
           skinBakeCache.preview.headSharpTex = null;
           if (skinBakeCache.full) {
             skinBakeCache.full.headOverlays = await loadHeadOverlayStack(skinBakeCache.full.hw, skinBakeCache.full.hh);
+            skinBakeCache.full.headSharp = null;
+            skinBakeCache.full.headSharpTex = null;
           }
           skinBakeCache.headKey = hKey;
         }
         if (skinBakeCache.bodyKey !== bKey) {
-          skinBakeCache.bodyAlphas = await loadBodyOverlayAlphaCanvases();
-          if (skinBakeCache.preview) {
-            skinBakeCache.preview.bodySharp = null;
-            skinBakeCache.preview.bodySharpTex = null;
+          const bodyOverlaysPrev = await loadBodyOverlayStack(skinBakeCache.preview.bw, skinBakeCache.preview.bh);
+          skinBakeCache.preview.bodyOverlays = bodyOverlaysPrev;
+          skinBakeCache.preview.bodySharp = null;
+          skinBakeCache.preview.bodySharpTex = null;
+          if (skinBakeCache.full) {
+            skinBakeCache.full.bodyOverlays = await loadBodyOverlayStack(skinBakeCache.full.bw, skinBakeCache.full.bh);
+            skinBakeCache.full.bodySharp = null;
+            skinBakeCache.full.bodySharpTex = null;
           }
           skinBakeCache.bodyKey = bKey;
         }
       }
 
       if (!previewOnly && !skinBakeCache.full) {
-        const [headOverlaysFull, browAlpha, bodyAlphas] = await Promise.all([
+        const [headOverlaysFull, bodyOverlaysFull] = await Promise.all([
           loadHeadOverlayStack(hw, hh),
-          loadEyebrowAlphaCanvas(),
-          loadBodyOverlayAlphaCanvases(),
+          loadBodyOverlayStack(bw, bh),
         ]);
-        skinBakeCache.browAlpha = browAlpha;
-        skinBakeCache.bodyAlphas = bodyAlphas;
         skinBakeCache.full = makeSkinTierFromSource(
           bodyTex.image, headTex.image, lipMaskImg,
-          [], headOverlaysFull, bw, bh, hw, hh, { storeOklch },
+          bodyOverlaysFull, headOverlaysFull, bw, bh, hw, hh, { storeOklch },
         );
       }
 
@@ -13200,9 +13202,9 @@
         const tier = preview && skinBakeCache.preview
           ? skinBakeCache.preview
           : (skinBakeCache.full || skinBakeCache.preview);
-        paintSkinTier(tier, skinParams, { sharpOverlays: !preview });
-        if (need.body) bodyMap = preview ? tier.bodyTex : (tier.bodySharpTex || tier.bodyTex);
-        if (need.head) headFaceMap = preview ? tier.headTex : (tier.headSharpTex || tier.headTex);
+        paintSkinTier(tier, skinParams, { sharpOverlays: false });
+        if (need.body) bodyMap = tier.bodyTex;
+        if (need.head) headFaceMap = tier.headTex;
       }
       let eyeMap = null;
       if (need.eyes !== false) eyeMap = await buildIrisPupilMap(irisHue, style);
