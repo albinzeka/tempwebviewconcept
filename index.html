@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover" />
   <title>VitalQuest character viewer</title>
   <script type="importmap">
   {
@@ -13,8 +13,22 @@
   }
   </script>
   <style>
-    html, body { margin: 0; height: 100%; background: #1a1a1a; overflow: hidden; font-family: ui-sans-serif, system-ui, sans-serif; }
-    #c { display: block; width: 100%; height: 100%; }
+    html, body {
+      margin: 0; height: 100%; background: #1a1a1a; overflow: hidden;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      touch-action: manipulation;
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-touch-callout: none;
+      overscroll-behavior: none;
+    }
+    html, body, #c, #morphPanel {
+      -webkit-text-size-adjust: 100%;
+    }
+    #c {
+      display: block; width: 100%; height: 100%;
+      touch-action: none;
+    }
     #hud {
       position: absolute; left: 8px; top: 8px; z-index: 2;
       background: rgba(0,0,0,0.65); color: #e8e8e8; padding: 10px 12px;
@@ -72,6 +86,7 @@
     #morphPanel .settings-wrap {
       position: relative;
       flex: 0 0 auto;
+      display: none; /* mobile sheet only */
     }
     #morphPanel #btnSettings {
       width: 34px;
@@ -91,20 +106,38 @@
     #settingsPop {
       position: absolute;
       left: 0;
-      top: calc(100% + 4px);
-      z-index: 9;
-      width: 168px;
+      bottom: calc(100% + 6px);
+      top: auto;
+      z-index: 20;
+      box-sizing: border-box;
+      width: 200px;
+      min-width: 200px;
+      max-width: min(200px, 80vw);
       padding: 6px;
       background: #1c1e26;
       border: 1px solid #3a3d48;
       border-radius: 8px;
       box-shadow: 0 8px 24px rgba(0,0,0,0.45);
     }
+    #settingsPop.settings-pop-fixed {
+      position: fixed;
+      z-index: 40;
+    }
     #settingsPop[hidden] { display: none; }
     #settingsPop #utilityTiles {
       display: grid;
       grid-template-columns: 1fr;
       gap: 4px;
+      width: 100%;
+    }
+    #settingsPop .util-tile {
+      width: 100%;
+      min-height: 40px;
+    }
+    #utilityTilesFooter {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
     }
     #panelSheetHandle {
       display: none;
@@ -134,6 +167,8 @@
     /* Phone / portrait: bottom sheet — character stays visible above */
     @media (max-width: 720px), ((orientation: portrait) and (max-height: 980px)) {
       #panelSheetHandle { display: flex; }
+      #morphPanel .settings-wrap { display: block; }
+      #utilityTilesFooter { display: none !important; }
       #morphPanel {
         left: 0;
         right: 0;
@@ -150,6 +185,9 @@
       #morphPanel.sheet-dragging {
         transition: none;
       }
+      #morphPanel.settings-open {
+        overflow: visible;
+      }
       #morphPanel .panel-header {
         margin-bottom: 4px;
         padding-right: 26px;
@@ -161,7 +199,9 @@
         font-size: 15px;
       }
       #settingsPop {
-        width: min(180px, calc(100% - 8px));
+        width: 200px;
+        min-width: 200px;
+        max-width: min(200px, calc(100vw - 16px));
       }
       #morphPanel .panel-body { gap: 4px; }
       #morphPanel .choiceCycle { gap: 4px; }
@@ -396,6 +436,10 @@
       display: grid;
       grid-template-columns: repeat(3, 1fr);
       gap: 6px;
+      width: 100%;
+    }
+    #settingsPop #utilityTiles {
+      grid-template-columns: 1fr;
     }
     #morphPanel .ctrl-tile,
     #morphPanel .util-tile {
@@ -640,8 +684,8 @@
     <div id="texHint">
       <button type="button" id="texHintBtn" aria-label="Texture quality help" aria-expanded="false">?</button>
       <div id="texHintPop" hidden>
-        <p>Low resolution textures are active during browsing. 4k textures apply automatically when you change category.</p>
-        <p>Manually force 4k load?</p>
+        <p id="texHintCopy">Low resolution textures are active during browsing. 4k textures apply automatically when you change category.</p>
+        <p id="texHintAsk">Manually force 4k load?</p>
         <button type="button" id="texHintYes">YES</button>
       </div>
     </div>
@@ -652,11 +696,7 @@
           <div class="settings-wrap">
             <button type="button" id="btnSettings" aria-label="Viewer settings" aria-expanded="false" aria-controls="settingsPop" title="Settings">⚙</button>
             <div id="settingsPop" hidden>
-              <div id="utilityTiles">
-                <button type="button" id="btnAnim" class="util-tile active"><span class="util-k">Animation</span><span class="util-v">ON</span></button>
-                <button type="button" id="btnCam" class="util-tile"><span class="util-k">Camera</span><span class="util-v">Body</span></button>
-                <button type="button" id="btnOrbit" class="util-tile active"><span class="util-k">Lock Camera</span><span class="util-v">ON</span></button>
-              </div>
+              <!-- utility tiles moved here on mobile via JS -->
             </div>
           </div>
           <div class="choiceCycle cat-cycle">
@@ -684,6 +724,13 @@
       <div class="tile-grid" id="randomizerRow" style="display:none">
         <button type="button" id="btnDefaultAll" class="util-tile">Default</button>
         <button type="button" id="btnRandomize" class="util-tile">Randomize</button>
+      </div>
+      <div id="utilityTilesFooter">
+        <div id="utilityTiles">
+          <button type="button" id="btnAnim" class="util-tile active"><span class="util-k">Animation</span><span class="util-v">ON</span></button>
+          <button type="button" id="btnCam" class="util-tile"><span class="util-k">Camera</span><span class="util-v">Body</span></button>
+          <button type="button" id="btnOrbit" class="util-tile"><span class="util-k">Lock Camera</span><span class="util-v">OFF</span></button>
+        </div>
       </div>
     </div>
   </div>
@@ -723,7 +770,7 @@
 
     const controls = new OrbitControls(camera, canvas);
     controls.target.set(0, 0.85, 0);
-    controls.enabled = false;
+    controls.enabled = true;
     controls.enableDamping = true;
 
     scene.add(new THREE.AmbientLight(0xffffff, 0.55));
@@ -2324,7 +2371,7 @@
       applyFormCtrls();
       try {
         if (characterTexturesOn) {
-          await applyCharacterTextures({ hue: irisHue, preview: false });
+          await applyCharacterTextures({ hue: irisHue, preview: prefersPreviewTextures() });
         }
         refreshHud();
         return { ok: true };
@@ -11966,7 +12013,7 @@
 
     // -- Character preview textures (body / head / overlays / eyes) --
     // Bump when publishing so GitHub Pages / browser caches cannot keep an old GLB or PNG.
-    const ASSET_REV = '20260813y';
+    const ASSET_REV = '20260813z';
     const textureLoader = new THREE.TextureLoader();
     const TEX_URL = (file) => {
       const enc = String(file || '').split('/').map(encodeURIComponent).join('/');
@@ -12047,6 +12094,16 @@
     ];
     const LIP_MASK_PATH = 'face/main/diffuse/Lip_Mask.png';
     const SKIN_PREVIEW_MAX = 512;
+    const isMobileSheetUi = () => window.matchMedia(
+      '(max-width: 720px), ((orientation: portrait) and (max-height: 980px))',
+    ).matches;
+    const prefersPreviewTextures = () => {
+      if (isMobileSheetUi()) return true;
+      try {
+        if (navigator.deviceMemory && navigator.deviceMemory <= 4) return true;
+      } catch (_) { /* ignore */ }
+      return false;
+    };
     let lipMaskAvailable = null; // null unknown, true/false after probe
     let characterTexturesOn = false;
     let texCache = {}; // cacheKey -> THREE.Texture
@@ -12091,6 +12148,22 @@
       const panel = document.getElementById('morphPanel');
       if (!panel) return;
       panel.classList.toggle('tex-preview', !!texturePreviewMode);
+      const copy = document.getElementById('texHintCopy');
+      const ask = document.getElementById('texHintAsk');
+      const yes = document.getElementById('texHintYes');
+      if (prefersPreviewTextures()) {
+        if (copy) {
+          copy.textContent = 'Phone mode uses preview textures (512) to avoid crashes. Full 4k maps stay on desktop.';
+        }
+        if (ask) ask.hidden = true;
+        if (yes) yes.hidden = true;
+      } else {
+        if (copy) {
+          copy.textContent = 'Low resolution textures are active during browsing. 4k textures apply automatically when you change category.';
+        }
+        if (ask) ask.hidden = false;
+        if (yes) yes.hidden = false;
+      }
       if (!texturePreviewMode) {
         const pop = document.getElementById('texHintPop');
         const btn = document.getElementById('texHintBtn');
@@ -12699,6 +12772,16 @@
 
     async function commitTextureFullQuality() {
       if (!characterTexturesOn || !texturePreviewMode) return;
+      // Mobile Safari OOMs on 4k canvas composites — stay on 512 preview.
+      if (prefersPreviewTextures()) {
+        const tier = skinBakeCache?.preview;
+        if (tier) {
+          paintSkinTier(tier, skinParams, { sharpOverlays: false });
+          pushSkinTexturesToMaterials(tier, previewDirty, { preview: true });
+        }
+        updateTexHint();
+        return;
+      }
       showLoadOverlay('tint', 'Loading textures…');
       await yieldForPaint();
       const parts = { body: previewDirty.body, head: previewDirty.head };
@@ -12724,8 +12807,9 @@
       beginTexturePreview();
       const tier = skinBakeCache?.preview;
       if (!tier) return;
-      paintSkinTier(tier, skinParams, { sharpOverlays: true });
-      pushSkinTexturesToMaterials(tier, previewDirty);
+      const sharp = !prefersPreviewTextures();
+      paintSkinTier(tier, skinParams, { sharpOverlays: sharp });
+      pushSkinTexturesToMaterials(tier, previewDirty, { preview: !sharp });
     }
 
     function previewSize(w, h) {
@@ -13101,6 +13185,10 @@
       parts = null,
     } = {}) {
       if (!glbRoot) return { ok: false, reason: 'no glb' };
+      if (prefersPreviewTextures()) {
+        preview = true;
+        texturePreviewMode = true;
+      }
       const need = parts || { body: true, head: true, eyes: true };
       backupMaterials();
       irisHue = hue;
@@ -13112,9 +13200,9 @@
         const tier = preview && skinBakeCache.preview
           ? skinBakeCache.preview
           : (skinBakeCache.full || skinBakeCache.preview);
-        paintSkinTier(tier, skinParams);
-        if (need.body) bodyMap = tier.bodySharpTex || tier.bodyTex;
-        if (need.head) headFaceMap = tier.headSharpTex || tier.headTex;
+        paintSkinTier(tier, skinParams, { sharpOverlays: !preview });
+        if (need.body) bodyMap = preview ? tier.bodyTex : (tier.bodySharpTex || tier.bodyTex);
+        if (need.head) headFaceMap = preview ? tier.headTex : (tier.headSharpTex || tier.headTex);
       }
       let eyeMap = null;
       if (need.eyes !== false) eyeMap = await buildIrisPupilMap(irisHue, style);
@@ -14186,7 +14274,7 @@
       else refreshAfterPose();
       let texInfo = null;
       try {
-        texInfo = await applyCharacterTextures({ hue: irisHue });
+        texInfo = await applyCharacterTextures({ hue: irisHue, preview: prefersPreviewTextures() });
       } catch (err) {
         console.warn('[textures] apply failed', err);
       }
@@ -14722,7 +14810,7 @@
     let uiSelectedKey = null;
     let uiAnimOn = true;
     let uiFaceCam = false;
-    let uiOrbit = false;
+    let uiOrbit = true;
     let uiCategoryId = null;
     let panelHeightLocked = false;
 
@@ -15256,9 +15344,47 @@
       btn.classList.toggle('active', !!active);
     }
 
+    function layoutUtilityTiles() {
+      const tiles = document.getElementById('utilityTiles');
+      const footerHost = document.getElementById('utilityTilesFooter');
+      const settingsPop = document.getElementById('settingsPop');
+      if (!tiles || !footerHost || !settingsPop) return;
+      if (isMobileSheetUi()) {
+        if (tiles.parentElement !== settingsPop) settingsPop.appendChild(tiles);
+      } else {
+        if (tiles.parentElement !== footerHost) footerHost.appendChild(tiles);
+        settingsPop.hidden = true;
+        settingsPop.classList.remove('settings-pop-fixed');
+        settingsPop.style.left = '';
+        settingsPop.style.bottom = '';
+        settingsPop.style.top = '';
+        morphPanel?.classList.remove('settings-open');
+        document.getElementById('btnSettings')?.setAttribute('aria-expanded', 'false');
+      }
+    }
+
+    function positionSettingsPop() {
+      const btnSettings = document.getElementById('btnSettings');
+      const settingsPop = document.getElementById('settingsPop');
+      if (!btnSettings || !settingsPop || settingsPop.hidden) return;
+      const rect = btnSettings.getBoundingClientRect();
+      const popW = Math.min(200, window.innerWidth - 16);
+      let left = rect.left;
+      left = Math.max(8, Math.min(left, window.innerWidth - popW - 8));
+      settingsPop.classList.add('settings-pop-fixed');
+      settingsPop.style.width = `${popW}px`;
+      settingsPop.style.minWidth = `${popW}px`;
+      settingsPop.style.left = `${left}px`;
+      settingsPop.style.right = 'auto';
+      settingsPop.style.top = 'auto';
+      settingsPop.style.bottom = `${Math.max(8, window.innerHeight - rect.top + 6)}px`;
+    }
+
     function wireMorphUi() {
       morphPanel.classList.add('visible');
       wirePanelSheetHandle();
+      layoutUtilityTiles();
+      window.addEventListener('resize', layoutUtilityTiles);
       const texHintBtn = document.getElementById('texHintBtn');
       const texHintPop = document.getElementById('texHintPop');
       const texHintYes = document.getElementById('texHintYes');
@@ -15269,16 +15395,29 @@
         texHintBtn?.setAttribute('aria-expanded', 'false');
       };
       const closeSettingsPop = () => {
-        if (settingsPop) settingsPop.hidden = true;
+        if (!settingsPop) return;
+        settingsPop.hidden = true;
+        settingsPop.classList.remove('settings-pop-fixed');
+        settingsPop.style.left = '';
+        settingsPop.style.bottom = '';
+        settingsPop.style.top = '';
+        morphPanel?.classList.remove('settings-open');
         btnSettings?.setAttribute('aria-expanded', 'false');
       };
       btnSettings?.addEventListener('click', (e) => {
         e.stopPropagation();
         if (!settingsPop) return;
         closeTexHintPop();
+        layoutUtilityTiles();
         const open = settingsPop.hidden;
-        settingsPop.hidden = !open;
-        btnSettings.setAttribute('aria-expanded', open ? 'true' : 'false');
+        if (open) {
+          settingsPop.hidden = false;
+          morphPanel?.classList.add('settings-open');
+          btnSettings.setAttribute('aria-expanded', 'true');
+          positionSettingsPop();
+        } else {
+          closeSettingsPop();
+        }
       });
       settingsPop?.addEventListener('click', (e) => e.stopPropagation());
       texHintBtn?.addEventListener('click', (e) => {
@@ -15358,6 +15497,7 @@
       });
       fillCategories();
       lockPanelHeightFromEyes();
+      setUtilTile(btnOrbit, 'Lock Camera', 'OFF', false);
     }
 
     async function modelAvailable(url) {
@@ -15381,7 +15521,7 @@
       try {
         await loadGlbFromUrl(DEFAULT_MODEL_URL);
         window.sandboxViewFront?.();
-        window.sandboxSetFixedCamera?.(true);
+        window.sandboxSetFixedCamera?.(false);
         window.sandboxPlayLoopAnim?.();
         wireMorphUi();
         hideLoadOverlay();
@@ -15393,6 +15533,25 @@
         if (t) t.textContent = `Load failed: ${err?.message || err}`;
       }
     }
+
+    (function lockViewerGestures() {
+      const block = (e) => { e.preventDefault(); };
+      document.addEventListener('contextmenu', block, { capture: true });
+      document.addEventListener('gesturestart', block, { capture: true, passive: false });
+      document.addEventListener('gesturechange', block, { capture: true, passive: false });
+      document.addEventListener('gestureend', block, { capture: true, passive: false });
+      let lastTouchEnd = 0;
+      document.addEventListener('touchend', (e) => {
+        // Block Safari double-tap zoom on the canvas / empty chrome, not panel controls.
+        if (e.target.closest('#morphPanel, button, select, input, a, label')) return;
+        const now = Date.now();
+        if (now - lastTouchEnd < 320) e.preventDefault();
+        lastTouchEnd = now;
+      }, { capture: true, passive: false });
+      document.addEventListener('touchmove', (e) => {
+        if (e.touches && e.touches.length > 1) e.preventDefault();
+      }, { capture: true, passive: false });
+    })();
 
     bootStandalone();
   </script>
