@@ -46,6 +46,7 @@
       display: none;
       flex-direction: column;
       position: absolute; right: 10px; bottom: 10px; z-index: 6;
+      box-sizing: border-box;
       width: min(252px, calc(100vw - 20px));
       height: var(--panel-h, auto);
       max-height: calc(100vh - 20px);
@@ -61,6 +62,50 @@
     #morphPanel.visible { display: flex; }
     #morphPanel .panel-header { flex: 0 0 auto; margin-bottom: 8px; padding-right: 28px; }
     #morphPanel .panel-header label[for="catSelect"] { display: none; }
+    #morphPanel .cat-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+    }
+    #morphPanel .cat-toolbar .cat-cycle { flex: 1 1 auto; min-width: 0; }
+    #morphPanel .settings-wrap {
+      position: relative;
+      flex: 0 0 auto;
+    }
+    #morphPanel #btnSettings {
+      width: 34px;
+      height: 34px;
+      padding: 0;
+      font-size: 16px;
+      line-height: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #morphPanel #btnSettings[aria-expanded="true"] {
+      background: #3d6df0;
+      border-color: #3d6df0;
+      color: #fff;
+    }
+    #settingsPop {
+      position: absolute;
+      left: 0;
+      top: calc(100% + 4px);
+      z-index: 9;
+      width: 168px;
+      padding: 6px;
+      background: #1c1e26;
+      border: 1px solid #3a3d48;
+      border-radius: 8px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+    }
+    #settingsPop[hidden] { display: none; }
+    #settingsPop #utilityTiles {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 4px;
+    }
     #panelSheetHandle {
       display: none;
       flex: 0 0 auto;
@@ -93,12 +138,12 @@
         left: 0;
         right: 0;
         bottom: 0;
-        width: 100%;
+        width: auto;
         max-width: none;
         height: var(--sheet-h, 30dvh) !important;
         max-height: var(--sheet-h, 30dvh);
         border-radius: 14px 14px 0 0;
-        padding: 4px 8px calc(6px + env(safe-area-inset-bottom, 0px));
+        padding: 4px max(8px, env(safe-area-inset-right, 0px)) calc(6px + env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left, 0px));
         box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.5);
         transition: height 0.18s ease, max-height 0.18s ease;
       }
@@ -108,6 +153,15 @@
       #morphPanel .panel-header {
         margin-bottom: 4px;
         padding-right: 26px;
+      }
+      #morphPanel .cat-toolbar { gap: 4px; }
+      #morphPanel #btnSettings {
+        width: 32px;
+        height: 32px;
+        font-size: 15px;
+      }
+      #settingsPop {
+        width: min(180px, calc(100% - 8px));
       }
       #morphPanel .panel-body { gap: 4px; }
       #morphPanel .choiceCycle { gap: 4px; }
@@ -124,6 +178,7 @@
       #tileScrollBox {
         padding: 4px;
         border-radius: 5px;
+        overflow-x: hidden;
       }
       #tileScrollBox.dense { padding: 2px 4px; }
       #tileScrollBox.dense .tile-grid { gap: 4px; }
@@ -593,10 +648,22 @@
     <div class="panel-header">
       <div class="row">
         <label for="catSelect">Main category</label>
-        <div class="choiceCycle cat-cycle">
-          <button type="button" id="catPrev" aria-label="Previous category">◀</button>
-          <select id="catSelect" aria-label="Main category"></select>
-          <button type="button" id="catNext" aria-label="Next category">▶</button>
+        <div class="cat-toolbar">
+          <div class="settings-wrap">
+            <button type="button" id="btnSettings" aria-label="Viewer settings" aria-expanded="false" aria-controls="settingsPop" title="Settings">⚙</button>
+            <div id="settingsPop" hidden>
+              <div id="utilityTiles">
+                <button type="button" id="btnAnim" class="util-tile active"><span class="util-k">Animation</span><span class="util-v">ON</span></button>
+                <button type="button" id="btnCam" class="util-tile"><span class="util-k">Camera</span><span class="util-v">Body</span></button>
+                <button type="button" id="btnOrbit" class="util-tile active"><span class="util-k">Lock Camera</span><span class="util-v">ON</span></button>
+              </div>
+            </div>
+          </div>
+          <div class="choiceCycle cat-cycle">
+            <button type="button" id="catPrev" aria-label="Previous category">◀</button>
+            <select id="catSelect" aria-label="Main category"></select>
+            <button type="button" id="catNext" aria-label="Next category">▶</button>
+          </div>
         </div>
       </div>
     </div>
@@ -617,11 +684,6 @@
       <div class="tile-grid" id="randomizerRow" style="display:none">
         <button type="button" id="btnDefaultAll" class="util-tile">Default</button>
         <button type="button" id="btnRandomize" class="util-tile">Randomize</button>
-      </div>
-      <div id="utilityTiles">
-        <button type="button" id="btnAnim" class="util-tile active"><span class="util-k">Animation</span><span class="util-v">ON</span></button>
-        <button type="button" id="btnCam" class="util-tile"><span class="util-k">Camera</span><span class="util-v">Body</span></button>
-        <button type="button" id="btnOrbit" class="util-tile active"><span class="util-k">Lock Camera</span><span class="util-v">ON</span></button>
       </div>
     </div>
   </div>
@@ -11904,7 +11966,7 @@
 
     // -- Character preview textures (body / head / overlays / eyes) --
     // Bump when publishing so GitHub Pages / browser caches cannot keep an old GLB or PNG.
-    const ASSET_REV = '20260813x';
+    const ASSET_REV = '20260813y';
     const textureLoader = new THREE.TextureLoader();
     const TEX_URL = (file) => {
       const enc = String(file || '').split('/').map(encodeURIComponent).join('/');
@@ -15200,13 +15262,29 @@
       const texHintBtn = document.getElementById('texHintBtn');
       const texHintPop = document.getElementById('texHintPop');
       const texHintYes = document.getElementById('texHintYes');
+      const btnSettings = document.getElementById('btnSettings');
+      const settingsPop = document.getElementById('settingsPop');
       const closeTexHintPop = () => {
         if (texHintPop) texHintPop.hidden = true;
         texHintBtn?.setAttribute('aria-expanded', 'false');
       };
+      const closeSettingsPop = () => {
+        if (settingsPop) settingsPop.hidden = true;
+        btnSettings?.setAttribute('aria-expanded', 'false');
+      };
+      btnSettings?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (!settingsPop) return;
+        closeTexHintPop();
+        const open = settingsPop.hidden;
+        settingsPop.hidden = !open;
+        btnSettings.setAttribute('aria-expanded', open ? 'true' : 'false');
+      });
+      settingsPop?.addEventListener('click', (e) => e.stopPropagation());
       texHintBtn?.addEventListener('click', (e) => {
         e.stopPropagation();
         if (!texHintPop) return;
+        closeSettingsPop();
         const open = texHintPop.hidden;
         texHintPop.hidden = !open;
         texHintBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
@@ -15217,7 +15295,10 @@
         closeTexHintPop();
         await commitTextureFullQuality();
       });
-      document.addEventListener('click', closeTexHintPop);
+      document.addEventListener('click', () => {
+        closeTexHintPop();
+        closeSettingsPop();
+      });
       catSelect.addEventListener('change', () => fillControls(catSelect.value));
       catPrev?.addEventListener('click', () => cycleCategory(-1));
       catNext?.addEventListener('click', () => cycleCategory(1));
