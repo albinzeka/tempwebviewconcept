@@ -433,7 +433,7 @@
     @keyframes loadspin { to { transform: rotate(360deg); } }
     #utilityTiles {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: repeat(2, 1fr);
       gap: 6px;
       width: 100%;
     }
@@ -729,6 +729,10 @@
           <button type="button" id="btnAnim" class="util-tile active"><span class="util-k">Animation</span><span class="util-v">ON</span></button>
           <button type="button" id="btnCam" class="util-tile"><span class="util-k">Camera</span><span class="util-v">Body</span></button>
           <button type="button" id="btnOrbit" class="util-tile"><span class="util-k">Lock Camera</span><span class="util-v">OFF</span></button>
+          <!-- MeshToonMaterial TRIAL: remove this button + TOON_SHADING_TRIAL_ENABLED to abandon -->
+          <button type="button" id="btnToon" class="util-tile" style="display:none"><span class="util-k">Shading</span><span class="util-v">PBR</span></button>
+          <!-- Outline: screen-space silhouette (mask edge). Toggle OFF to compare. -->
+          <button type="button" id="btnOutline" class="util-tile active"><span class="util-k">Outline</span><span class="util-v">ON</span></button>
         </div>
       </div>
     </div>
@@ -1449,16 +1453,16 @@
     ];
     const RANDOMIZE_SKIP_CATS = new Set([
       'randomizer', 'presets', 'eyeStyle', 'eyebrowsTex', 'makeupTex',
-      'faceOverlay', 'bodyColor', 'bodyArt', 'outfit',
+      'faceOverlay', 'bodyColor', 'bodyArt', 'outfit', 'hair',
     ]);
     const TEXTURE_CATEGORY_IDS = new Set([
       'eyeStyle', 'eyebrowsTex', 'makeupTex', 'faceOverlay',
-      'bodyColor', 'bodyArt', 'outfit',
+      'bodyColor', 'bodyArt', 'outfit', 'hair',
     ]);
     /** Choice-only categories: options render as tiles (not a separate Option row). */
     const OPTION_TILE_CATEGORIES = new Set([
       'eyeStyle', 'eyebrowsTex', 'faceOverlay', 'makeupTex',
-      'bodyColor', 'bodyArt', 'outfit',
+      'bodyColor', 'bodyArt', 'outfit', 'hair',
     ]);
     /** Bone / shapekey / color sliders listed in the tile box (Body color style). */
     const INLINE_SLIDER_CATEGORIES = new Set([
@@ -1468,7 +1472,7 @@
     const HIDDEN_CATEGORIES = new Set(['presets']);
     const CATEGORY_DISPLAY_ORDER = [
       'randomizer',
-      'headShapes', 'eyes', 'eyeStyle', 'eyebrowsTex', 'brows', 'jaw', 'mouth', 'nose', 'ears',
+      'headShapes', 'eyes', 'eyeStyle', 'eyebrowsTex', 'brows', 'hair', 'jaw', 'mouth', 'nose', 'ears',
       'makeupTex', 'faceOverlay', 'specials',
       'bodyBones', 'bodyShapes', 'bodyColor', 'bodyArt', 'outfit',
     ];
@@ -1677,6 +1681,24 @@
             ],
             defaultValue: 'EYEBROWS_1.png',
           },
+        ],
+      },
+      {
+        id: 'hair',
+        label: 'Hair',
+        group: 'head',
+        controls: [
+          {
+            type: 'choice',
+            id: 'hairStyle',
+            label: 'Hair',
+            options: [
+              { value: 'none', label: 'None' },
+              { value: 'bob', label: 'Bob' },
+            ],
+            defaultValue: 'none',
+          },
+          { type: 'hairHue', id: 'hairHue', label: 'Hair hue', min: 0, max: 1, defaultValue: 0.55 },
         ],
       },
       {
@@ -2089,7 +2111,7 @@
       if (c.type === 'genderPair' || c.type === 'iris') {
         return { min: c.min ?? 0, max: c.max ?? 1 };
       }
-      if (c.type === 'outfitHue') {
+      if (c.type === 'outfitHue' || c.type === 'hairHue') {
         return { min: c.min ?? 0, max: c.max ?? 1 };
       }
       if (c.type === 'skinParam') {
@@ -2148,6 +2170,10 @@
       }
       if (c.type === 'outfitHue') {
         setUnderwearHue(t);
+        return true;
+      }
+      if (c.type === 'hairHue') {
+        setHairHue(t);
         return true;
       }
       if (c.type === 'skinParam') {
@@ -2343,6 +2369,7 @@
       });
       texChoiceValues.skinTone = 'caucasian';
       irisHue = 0.58;
+      setHairHue(0.55);
       for (const cat of MORPH_CATEGORIES) {
         for (const c of cat.controls) {
           if (c.type === 'choice' && c.defaultValue != null) {
@@ -2351,6 +2378,7 @@
         }
       }
       underwearHue = 0.5;
+      unequipHair();
       invalidateSkinBakeCache();
       texturePreviewMode = false;
       previewDirty.body = false;
@@ -2364,6 +2392,7 @@
         if (characterTexturesOn) {
           await applyCharacterTextures({ hue: irisHue, preview: prefersPreviewTextures() });
         }
+        if (outlineEnabled) rebuildOutlineMeshes();
         refreshHud();
         return { ok: true };
       } finally {
@@ -10699,6 +10728,641 @@
       return skel;
     }
 
+    /**
+     * === Apparel hair + silhouette outline ===
+     * Hair: category Hair → None / Bob (bob.stripped.glb retargeted onto character skeleton)
+     * Outline: screen-space OUTER silhouette via binary character mask (no inverted hull).
+     *
+     * Presets (sandboxSetOutlinePreset):
+     *   'best'  — SAVED 2026-08-16: flood-fill holes + crisp rim (armpit-accurate). Jagged but correct.
+     *   'ssaa2' — trial: 2× mask + soft coverage rim (aim: less jaggy, keep armpits).
+     */
+    const OUTLINE_TRIAL_ENABLED = true;
+    const OUTLINE_PRESET_BEST = 'best';
+    const OUTLINE_PRESET_SSAA2 = 'ssaa2';
+    let outlinePreset = OUTLINE_PRESET_SSAA2;
+    let outlinePx = 1.75;
+    const AUTO_EQUIP_HAIR = 'bob';
+    const HAIR_ASSET_FILES = {
+      bob: 'bob.stripped.glb',
+    };
+    let hairRoot = null;
+    let hairMeshes = [];
+    let outlineEnabled = true;
+    let outlineColorRT = null;
+    let outlineMaskRT = null;
+    let outlineMaskHiRT = null;
+    let outlineHiScratchRT = null;
+    let outlineClosedRT = null;
+    let outlineMaskMat = null;
+    let outlineCompScene = null;
+    let outlineCompCam = null;
+    let outlineCompMatBest = null;
+    let outlineCompMatSsaa = null;
+    let outlineBlitMat = null;
+    let outlineHoleDataTex = null;
+    let outlineHoleBuf = null;
+    let outlineHoleSolid = null;
+    let outlineHoleExterior = null;
+    let outlineHoleQueue = null;
+    let outlineTargetsW = 0;
+    let outlineTargetsH = 0;
+    const OUTLINE_HOLE_FILL_MAX = 640;
+
+    function hairAssetUrl(styleId) {
+      const file = HAIR_ASSET_FILES[styleId];
+      if (!file) return null;
+      const rev = (typeof ASSET_REV !== 'undefined') ? ASSET_REV : 'dev';
+      return new URL(`./models/${file}?v=${rev}`, import.meta.url).href;
+    }
+
+    function retargetSkinnedMeshToSkeleton(mesh, targetSkeleton) {
+      if (!mesh?.isSkinnedMesh || !mesh.skeleton || !targetSkeleton) return false;
+      const byName = new Map();
+      for (const b of targetSkeleton.bones) {
+        if (b?.name) byName.set(b.name, b);
+      }
+      const bones = [];
+      const inverses = [];
+      let missing = 0;
+      for (let i = 0; i < mesh.skeleton.bones.length; i++) {
+        const src = mesh.skeleton.bones[i];
+        const dst = byName.get(src.name);
+        if (dst) bones.push(dst);
+        else {
+          missing += 1;
+          bones.push(src);
+        }
+        inverses.push(mesh.skeleton.boneInverses[i].clone());
+      }
+      if (missing) console.warn('[hair] retarget missing bones:', missing);
+      mesh.bind(new THREE.Skeleton(bones, inverses), mesh.bindMatrix);
+      mesh.normalizeSkinWeights?.();
+      return true;
+    }
+
+    function hairColorFromHue(h) {
+      const c = new THREE.Color();
+      const hue = Math.max(0, Math.min(1, +h || 0));
+      c.setHSL(hue, 0.62, 0.58);
+      return c;
+    }
+
+    function applyHairHueToMeshes() {
+      const col = hairColorFromHue(hairHue);
+      for (const m of hairMeshes) {
+        const mat = Array.isArray(m.material) ? m.material[0] : m.material;
+        if (!mat?.color) continue;
+        mat.color.copy(col);
+        mat.needsUpdate = true;
+      }
+    }
+
+    function setHairHue(h) {
+      hairHue = Math.max(0, Math.min(1, +h));
+      applyHairHueToMeshes();
+      return hairHue;
+    }
+
+    function makeHairMaterial(srcMat) {
+      const mat = new THREE.MeshStandardMaterial({
+        color: hairColorFromHue(hairHue),
+        roughness: 0.55,
+        metalness: 0.02,
+        side: THREE.DoubleSide,
+        vertexColors: false,
+      });
+      mat.name = srcMat?.name || 'Hair';
+      return mat;
+    }
+
+    function unequipHair() {
+      if (hairRoot) {
+        hairRoot.parent?.remove(hairRoot);
+        hairRoot.traverse((o) => {
+          if (o.isMesh) {
+            if (o.material && !Array.isArray(o.material)) o.material.dispose?.();
+          }
+        });
+      }
+      hairRoot = null;
+      hairMeshes = [];
+      texChoiceValues.hairStyle = 'none';
+    }
+
+    async function setHairStyle(styleId) {
+      const id = styleId || 'none';
+      unequipHair();
+      texChoiceValues.hairStyle = id;
+      if (id === 'none' || !glbRoot) {
+        return { ok: true, hair: 'none' };
+      }
+      const url = hairAssetUrl(id);
+      if (!url) {
+        console.warn('[hair] unknown style', id);
+        return { ok: false, reason: 'unknown' };
+      }
+      const charSkel = findSkeleton(glbRoot);
+      if (!charSkel) {
+        console.warn('[hair] character skeleton missing');
+        statusEl.textContent = 'Hair failed: no character skeleton';
+        return { ok: false, reason: 'no-skel' };
+      }
+      statusEl.textContent = `Loading hair (${id})…`;
+      try {
+        const gltf = await new GLTFLoader().loadAsync(url);
+        hairRoot = new THREE.Group();
+        hairRoot.name = `hair_${id}`;
+        const sourced = [];
+        gltf.scene.updateMatrixWorld(true);
+        gltf.scene.traverse((o) => {
+          if (o.isSkinnedMesh) sourced.push(o);
+        });
+        if (!sourced.length) {
+          console.warn('[hair] no SkinnedMesh in', url);
+          statusEl.textContent = 'Hair failed: no skinned mesh in GLB';
+          return { ok: false, reason: 'no-mesh' };
+        }
+        const meshes = [];
+        for (const o of sourced) {
+          o.parent?.remove(o);
+          o.updateMatrix();
+          retargetSkinnedMeshToSkeleton(o, charSkel);
+          const oldMat = Array.isArray(o.material) ? o.material[0] : o.material;
+          o.material = makeHairMaterial(oldMat);
+          o.frustumCulled = false;
+          o.userData.apparel = 'hair';
+          o.userData.outlineRole = 'hair';
+          o.castShadow = false;
+          o.visible = true;
+          meshes.push(o);
+          hairRoot.add(o);
+        }
+        hairMeshes = meshes;
+        glbRoot.add(hairRoot);
+        charSkel.update();
+        for (const m of meshes) {
+          m.computeBoundingSphere?.();
+          m.computeBoundingBox?.();
+        }
+        console.log('[hair] equipped', id, 'meshes', meshes.length);
+        statusEl.textContent = `Hair: ${id} (${meshes.length} mesh)`;
+        return { ok: true, hair: id, meshes: meshes.length };
+      } catch (err) {
+        console.error('[hair] load failed', err);
+        statusEl.textContent = `Hair load failed: ${err?.message || err}`;
+        unequipHair();
+        return { ok: false, reason: String(err?.message || err) };
+      }
+    }
+
+    function initOutlinePost() {
+      if (outlineCompMatBest && outlineCompMatSsaa) return;
+      outlineMaskMat = new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        side: THREE.DoubleSide,
+      });
+      outlineCompCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+      const morphVert = /* glsl */`
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = vec4(position.xy, 0.0, 1.0);
+        }
+      `;
+      outlineBlitMat = new THREE.ShaderMaterial({
+        uniforms: {
+          tMap: { value: null },
+          tAdd: { value: null },
+          modeOr: { value: 0 },
+        },
+        vertexShader: morphVert,
+        fragmentShader: /* glsl */`
+          uniform sampler2D tMap;
+          uniform sampler2D tAdd;
+          uniform float modeOr;
+          varying vec2 vUv;
+          void main() {
+            float a = texture2D(tMap, vUv).r;
+            if (modeOr > 0.5) {
+              float b = texture2D(tAdd, vUv).r;
+              a = max(a, b);
+            }
+            gl_FragColor = vec4(vec3(a), 1.0);
+          }
+        `,
+        depthTest: false,
+        depthWrite: false,
+      });
+
+      // BEST (saved): crisp armpit-accurate rim — jagged but correct creases.
+      outlineCompMatBest = new THREE.ShaderMaterial({
+        uniforms: {
+          tDiffuse: { value: null },
+          tMask: { value: null },
+          texelSize: { value: new THREE.Vector2(1, 1) },
+          thickness: { value: 1.6 },
+          outlineColor: { value: new THREE.Color(0x000000) },
+        },
+        vertexShader: morphVert,
+        fragmentShader: /* glsl */`
+          uniform sampler2D tDiffuse;
+          uniform sampler2D tMask;
+          uniform vec2 texelSize;
+          uniform float thickness;
+          uniform vec3 outlineColor;
+          varying vec2 vUv;
+          float sampleMask(vec2 uv) { return texture2D(tMask, uv).r; }
+          void main() {
+            vec4 color = texture2D(tDiffuse, vUv);
+            float m = sampleMask(vUv);
+            float edge = 0.0;
+            if (m < 0.5) {
+              float near = 0.0;
+              near = max(near, sampleMask(vUv + vec2( 1.0, 0.0) * texelSize));
+              near = max(near, sampleMask(vUv + vec2(-1.0, 0.0) * texelSize));
+              near = max(near, sampleMask(vUv + vec2( 0.0, 1.0) * texelSize));
+              near = max(near, sampleMask(vUv + vec2( 0.0,-1.0) * texelSize));
+              if (near > 0.5) {
+                edge = 1.0;
+              } else if (thickness > 1.01) {
+                float maxM = 0.0;
+                for (float i = 2.0; i <= 5.0; i++) {
+                  if (i > thickness) break;
+                  for (float a = 0.0; a < 16.0; a++) {
+                    float ang = a * 0.39269908169;
+                    maxM = max(maxM, sampleMask(vUv + vec2(cos(ang), sin(ang)) * i * texelSize));
+                  }
+                }
+                edge = step(0.5, maxM);
+              }
+            }
+            gl_FragColor = vec4(mix(color.rgb, outlineColor, edge), 1.0);
+            #include <colorspace_fragment>
+          }
+        `,
+        depthTest: false,
+        depthWrite: false,
+        toneMapped: false,
+      });
+
+      // SSAA2 trial: bilinear 2× mask coverage + soft occupancy rim.
+      outlineCompMatSsaa = new THREE.ShaderMaterial({
+        uniforms: {
+          tDiffuse: { value: null },
+          tMaskHi: { value: null },
+          texelSize: { value: new THREE.Vector2(1, 1) },
+          thickness: { value: 1.75 },
+          outlineColor: { value: new THREE.Color(0x000000) },
+        },
+        vertexShader: morphVert,
+        fragmentShader: /* glsl */`
+          uniform sampler2D tDiffuse;
+          uniform sampler2D tMaskHi;
+          uniform vec2 texelSize;
+          uniform float thickness;
+          uniform vec3 outlineColor;
+          varying vec2 vUv;
+
+          float cov(vec2 uv) {
+            return texture2D(tMaskHi, uv).r;
+          }
+
+          float covDilate(vec2 uv, float radiusPx) {
+            float m = cov(uv);
+            float rMax = max(radiusPx, 0.75);
+            for (float i = 1.0; i <= 8.0; i++) {
+              float r = i * 0.5;
+              if (r > rMax) break;
+              for (float a = 0.0; a < 16.0; a++) {
+                float ang = a * 0.39269908169;
+                vec2 off = vec2(cos(ang), sin(ang)) * r * texelSize;
+                m = max(m, cov(uv + off));
+              }
+            }
+            return m;
+          }
+
+          void main() {
+            vec4 color = texture2D(tDiffuse, vUv);
+            float m = cov(vUv);
+            float d = covDilate(vUv, thickness);
+            float aa = 0.22;
+            // Fade only OUTSIDE the 0.5 contour — never darken interior skin.
+            float outside = 1.0 - smoothstep(0.5, 0.5 + aa, m);
+            float nearChar = smoothstep(0.5 - aa, 0.5 + aa, d);
+            float edge = clamp(outside * nearChar, 0.0, 1.0);
+            gl_FragColor = vec4(mix(color.rgb, outlineColor, edge), 1.0);
+            #include <colorspace_fragment>
+          }
+        `,
+        depthTest: false,
+        depthWrite: false,
+        toneMapped: false,
+      });
+
+      outlineCompScene = new THREE.Scene();
+      outlineCompScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), outlineCompMatBest));
+    }
+
+    function ensureOutlineTargets() {
+      initOutlinePost();
+      const w = Math.max(1, canvas.width | 0);
+      const h = Math.max(1, canvas.height | 0);
+      if (outlineColorRT && outlineTargetsW === w && outlineTargetsH === h) return;
+      outlineTargetsW = w;
+      outlineTargetsH = h;
+      outlineColorRT?.dispose();
+      outlineMaskRT?.dispose();
+      outlineMaskHiRT?.dispose();
+      outlineHiScratchRT?.dispose();
+      outlineHoleDataTex?.dispose();
+      outlineHoleDataTex = null;
+      outlineHoleBuf = null;
+      const colorOpts = {
+        minFilter: THREE.LinearFilter,
+        magFilter: THREE.LinearFilter,
+        type: THREE.UnsignedByteType,
+      };
+      const maskOpts = {
+        minFilter: THREE.NearestFilter,
+        magFilter: THREE.NearestFilter,
+        type: THREE.UnsignedByteType,
+        depthBuffer: true,
+      };
+      const hiOpts = {
+        minFilter: THREE.LinearFilter,
+        magFilter: THREE.LinearFilter,
+        type: THREE.UnsignedByteType,
+        depthBuffer: true,
+      };
+      outlineColorRT = new THREE.WebGLRenderTarget(w, h, colorOpts);
+      // Linear working buffer (matches scene materials). Composite encodes once via colorspace_fragment.
+      outlineColorRT.texture.colorSpace = THREE.LinearSRGBColorSpace;
+      outlineMaskRT = new THREE.WebGLRenderTarget(w, h, maskOpts);
+      outlineMaskHiRT = new THREE.WebGLRenderTarget(w * 2, h * 2, hiOpts);
+      outlineHiScratchRT = new THREE.WebGLRenderTarget(w * 2, h * 2, {
+        minFilter: THREE.LinearFilter,
+        magFilter: THREE.LinearFilter,
+        type: THREE.UnsignedByteType,
+        depthBuffer: false,
+      });
+    }
+
+    function fillEnclosedMaskHoles() {
+      const fullW = outlineTargetsW;
+      const fullH = outlineTargetsH;
+      if (fullW < 8 || fullH < 8) return;
+      const scale = Math.min(1, OUTLINE_HOLE_FILL_MAX / Math.max(fullW, fullH));
+      const w = Math.max(8, Math.round(fullW * scale));
+      const h = Math.max(8, Math.round(fullH * scale));
+
+      if (!outlineClosedRT || outlineClosedRT.width !== w || outlineClosedRT.height !== h) {
+        outlineClosedRT?.dispose();
+        outlineClosedRT = new THREE.WebGLRenderTarget(w, h, {
+          minFilter: THREE.NearestFilter,
+          magFilter: THREE.NearestFilter,
+          type: THREE.UnsignedByteType,
+          depthBuffer: false,
+        });
+      }
+
+      outlineBlitMat.uniforms.tMap.value = outlineMaskRT.texture;
+      outlineBlitMat.uniforms.modeOr.value = 0;
+      const prevMat = outlineCompScene.children[0].material;
+      outlineCompScene.children[0].material = outlineBlitMat;
+      renderer.setRenderTarget(outlineClosedRT);
+      renderer.clear();
+      renderer.render(outlineCompScene, outlineCompCam);
+
+      const n = w * h;
+      if (!outlineHoleBuf || outlineHoleBuf.length !== n * 4) {
+        outlineHoleBuf = new Uint8Array(n * 4);
+        outlineHoleSolid = new Uint8Array(n);
+        outlineHoleExterior = new Uint8Array(n);
+        outlineHoleQueue = new Int32Array(n);
+      }
+      renderer.readRenderTargetPixels(outlineClosedRT, 0, 0, w, h, outlineHoleBuf);
+
+      const solid = outlineHoleSolid;
+      const exterior = outlineHoleExterior;
+      const q = outlineHoleQueue;
+      solid.fill(0);
+      exterior.fill(0);
+      for (let i = 0; i < n; i++) solid[i] = outlineHoleBuf[i * 4] > 127 ? 1 : 0;
+
+      let qh = 0;
+      let qt = 0;
+      const push = (x, y) => {
+        const i = y * w + x;
+        if (exterior[i] || solid[i]) return;
+        exterior[i] = 1;
+        q[qt++] = i;
+      };
+      for (let x = 0; x < w; x++) {
+        push(x, 0);
+        push(x, h - 1);
+      }
+      for (let y = 0; y < h; y++) {
+        push(0, y);
+        push(w - 1, y);
+      }
+      while (qh < qt) {
+        const i = q[qh++];
+        const x = i % w;
+        const y = (i / w) | 0;
+        if (x > 0) push(x - 1, y);
+        if (x < w - 1) push(x + 1, y);
+        if (y > 0) push(x, y - 1);
+        if (y < h - 1) push(x, y + 1);
+      }
+
+      for (let i = 0; i < n; i++) {
+        const fill = solid[i] || !exterior[i] ? 255 : 0;
+        outlineHoleBuf[i * 4] = fill;
+        outlineHoleBuf[i * 4 + 1] = fill;
+        outlineHoleBuf[i * 4 + 2] = fill;
+        outlineHoleBuf[i * 4 + 3] = 255;
+      }
+
+      if (!outlineHoleDataTex || outlineHoleDataTex.image.width !== w || outlineHoleDataTex.image.height !== h) {
+        outlineHoleDataTex?.dispose();
+        outlineHoleDataTex = new THREE.DataTexture(outlineHoleBuf, w, h, THREE.RGBAFormat);
+        outlineHoleDataTex.magFilter = THREE.NearestFilter;
+        outlineHoleDataTex.minFilter = THREE.NearestFilter;
+        outlineHoleDataTex.flipY = false;
+        outlineHoleDataTex.needsUpdate = true;
+      } else {
+        outlineHoleDataTex.image.data = outlineHoleBuf;
+        outlineHoleDataTex.needsUpdate = true;
+      }
+
+      outlineBlitMat.uniforms.tMap.value = outlineHoleDataTex;
+      outlineBlitMat.uniforms.modeOr.value = 0;
+      renderer.setRenderTarget(outlineMaskRT);
+      renderer.clear();
+      renderer.render(outlineCompScene, outlineCompCam);
+      outlineCompScene.children[0].material = prevMat;
+    }
+
+    function stampHolesOntoMaskHi() {
+      outlineBlitMat.uniforms.tMap.value = outlineMaskHiRT.texture;
+      outlineBlitMat.uniforms.tAdd.value = outlineMaskRT.texture;
+      outlineBlitMat.uniforms.modeOr.value = 1;
+      const prevMat = outlineCompScene.children[0].material;
+      outlineCompScene.children[0].material = outlineBlitMat;
+      renderer.setRenderTarget(outlineHiScratchRT);
+      renderer.clear();
+      renderer.render(outlineCompScene, outlineCompCam);
+      outlineBlitMat.uniforms.tMap.value = outlineHiScratchRT.texture;
+      outlineBlitMat.uniforms.modeOr.value = 0;
+      renderer.setRenderTarget(outlineMaskHiRT);
+      renderer.clear();
+      renderer.render(outlineCompScene, outlineCompCam);
+      outlineCompScene.children[0].material = prevMat;
+    }
+
+    function meshContributesToOutlineMask(o) {
+      if (!o?.isMesh || !o.visible) return false;
+      if (o.userData?.apparel === 'hair' || o.userData?.outlineRole === 'hair') return true;
+      const matName = Array.isArray(o.material) ? o.material[0]?.name : o.material?.name;
+      const role = materialRole(matName) || materialRole(o.name) || o.userData?.outlineRole;
+      if (role === 'outline' || role === 'shine') return false;
+      if (/outline|cycle/i.test(o.name || '')) return false;
+      return true;
+    }
+
+    function isUnderRoot(obj, root) {
+      let p = obj;
+      while (p) {
+        if (p === root) return true;
+        p = p.parent;
+      }
+      return false;
+    }
+
+    function clearOutlineMeshes() {}
+    function rebuildOutlineMeshes() {}
+
+    function applyOutlinePreset(name) {
+      const id = String(name || '').toLowerCase();
+      if (id === OUTLINE_PRESET_BEST) {
+        outlinePreset = OUTLINE_PRESET_BEST;
+        outlinePx = 1.6;
+      } else {
+        outlinePreset = OUTLINE_PRESET_SSAA2;
+        outlinePx = 1.75;
+      }
+      return outlinePreset;
+    }
+
+    function renderCharacterMaskTo(rt) {
+      const hideList = [];
+      scene.traverse((o) => {
+        if (!o || o === scene || o.isLight || o.isCamera) return;
+        const isRenderable = o.isMesh || o.isLine || o.isLineSegments || o.isPoints || o.isSprite;
+        if (!isRenderable || !o.visible) return;
+        const keep = o.isMesh && isUnderRoot(o, glbRoot) && meshContributesToOutlineMask(o);
+        if (!keep) {
+          hideList.push(o);
+          o.visible = false;
+        }
+      });
+      for (const m of hairMeshes) {
+        if (!m) continue;
+        m.visible = true;
+        const idx = hideList.indexOf(m);
+        if (idx >= 0) hideList.splice(idx, 1);
+      }
+      const prevBg = scene.background;
+      const prevOverride = scene.overrideMaterial;
+      scene.background = new THREE.Color(0x000000);
+      scene.overrideMaterial = outlineMaskMat;
+      renderer.setRenderTarget(rt);
+      renderer.clear();
+      renderer.render(scene, camera);
+      scene.overrideMaterial = prevOverride;
+      scene.background = prevBg;
+      for (const o of hideList) o.visible = true;
+    }
+
+    function renderWithOutline() {
+      if (!OUTLINE_TRIAL_ENABLED || !outlineEnabled || !glbRoot) {
+        renderer.outputColorSpace = THREE.SRGBColorSpace;
+        renderer.setRenderTarget(null);
+        renderer.render(scene, camera);
+        return;
+      }
+      ensureOutlineTargets();
+
+      // Color pass uses the same sRGB encode as Outline-OFF (direct to canvas).
+      renderer.setRenderTarget(outlineColorRT);
+      renderer.clear();
+      renderer.render(scene, camera);
+
+      const useSsaa = outlinePreset === OUTLINE_PRESET_SSAA2;
+
+      if (useSsaa) {
+        renderCharacterMaskTo(outlineMaskHiRT);
+        // Nearest downsample so hole-fill sees a binary silhouette (not a soft average).
+        outlineMaskHiRT.texture.minFilter = THREE.NearestFilter;
+        outlineMaskHiRT.texture.magFilter = THREE.NearestFilter;
+        outlineBlitMat.uniforms.tMap.value = outlineMaskHiRT.texture;
+        outlineBlitMat.uniforms.modeOr.value = 0;
+        const prevMat = outlineCompScene.children[0].material;
+        outlineCompScene.children[0].material = outlineBlitMat;
+        renderer.setRenderTarget(outlineMaskRT);
+        renderer.clear();
+        renderer.render(outlineCompScene, outlineCompCam);
+        outlineCompScene.children[0].material = prevMat;
+        fillEnclosedMaskHoles();
+        stampHolesOntoMaskHi();
+        outlineMaskHiRT.texture.minFilter = THREE.LinearFilter;
+        outlineMaskHiRT.texture.magFilter = THREE.LinearFilter;
+
+        outlineCompMatSsaa.uniforms.tDiffuse.value = outlineColorRT.texture;
+        outlineCompMatSsaa.uniforms.tMaskHi.value = outlineMaskHiRT.texture;
+        outlineCompMatSsaa.uniforms.texelSize.value.set(1 / outlineTargetsW, 1 / outlineTargetsH);
+        outlineCompMatSsaa.uniforms.thickness.value = outlinePx;
+        outlineCompScene.children[0].material = outlineCompMatSsaa;
+      } else {
+        renderCharacterMaskTo(outlineMaskRT);
+        fillEnclosedMaskHoles();
+        outlineCompMatBest.uniforms.tDiffuse.value = outlineColorRT.texture;
+        outlineCompMatBest.uniforms.tMask.value = outlineMaskRT.texture;
+        outlineCompMatBest.uniforms.texelSize.value.set(1 / outlineTargetsW, 1 / outlineTargetsH);
+        outlineCompMatBest.uniforms.thickness.value = outlinePx;
+        outlineCompScene.children[0].material = outlineCompMatBest;
+      }
+
+      renderer.setRenderTarget(null);
+      renderer.clear();
+      // Keep SRGB output; composite shaders include colorspace_fragment (linear → display).
+      renderer.outputColorSpace = THREE.SRGBColorSpace;
+      renderer.render(outlineCompScene, outlineCompCam);
+    }
+
+    async function setOutlineTrial(on) {
+      if (!OUTLINE_TRIAL_ENABLED) {
+        outlineEnabled = false;
+        return false;
+      }
+      outlineEnabled = !!on;
+      const btn = document.getElementById('btnOutline');
+      if (btn) setUtilTile(btn, 'Outline', outlineEnabled ? 'ON' : 'OFF', outlineEnabled);
+      setOutlineVisible(false);
+      statusEl.textContent = outlineEnabled
+        ? `Outline ON (${outlinePreset})`
+        : 'Outline OFF';
+      return true;
+    }
+
+    function setOutlinePreset(name) {
+      const id = applyOutlinePreset(name);
+      statusEl.textContent = `Outline preset: ${id}`;
+      return id;
+    }
+
     function normalizeBoneKey(name) {
       return String(name || '').replace(/\./g, '');
     }
@@ -12004,7 +12668,7 @@
 
     // -- Character preview textures (body / head / overlays / eyes) --
     // Bump when publishing so GitHub Pages / browser caches cannot keep an old GLB or PNG.
-    const ASSET_REV = '20260814b';
+    const ASSET_REV = '20260816n';
     const textureLoader = new THREE.TextureLoader();
     const TEX_URL = (file) => {
       const enc = String(file || '').split('/').map(encodeURIComponent).join('/');
@@ -12039,6 +12703,7 @@
     const EYE_SHINE = 'eyes/EYES_shine.png';
 
     let irisHue = 0.58; // 0..1 -> blue default
+    let hairHue = 0.55; // 0..1 — bright default so black outline reads on hair
     let underwearHue = 0.5;
     /**
      * Procedural OKLCH skin (Custom White base).
@@ -12120,6 +12785,7 @@
       faceExtra: 'none',
       bodyExtra: 'none',
       underwear: 'none',
+      hairStyle: 'none',
     };
 
     function showLoadOverlay(mode = 'boot', text) {
@@ -13128,8 +13794,77 @@
       if (/eye/.test(n) && !/lid|lash/.test(n)) return 'eye';
       if (/head|face/.test(n)) return 'head';
       if (/brow/.test(n)) return 'brow';
+      if (/hair|bob/.test(n)) return 'hair';
       if (/body|basemesh|female|skin/.test(n)) return 'body';
       return null;
+    }
+
+    /**
+     * === MeshToonMaterial TRIAL (reversible) ===
+     * UI: Shading util tile (PBR <-> Toon), or window.sandboxSetToonShading(bool)
+     * Abandon / restore previous look:
+     *   1. Set TOON_SHADING_TRIAL_ENABLED = false (hides button + forces PBR)
+     *   2. Remove #btnToon from HTML and its click handler in wireMorphUi
+     *   3. Optional cleanup: delete toonShadingOn, getToonGradientMap, setToonShadingTrial,
+     *      applyToonTrialLighting, and the MeshToonMaterial branch in makePreviewMat
+     */
+    const TOON_SHADING_TRIAL_ENABLED = false;
+    let toonShadingOn = false;
+    let toonGradientMap = null;
+
+    function getToonGradientMap() {
+      if (toonGradientMap) return toonGradientMap;
+      // 4-step cel ramp (nearest-filtered). Easy to swap for 2–5 bands later.
+      const data = new Uint8Array([16, 80, 160, 255]);
+      const tex = new THREE.DataTexture(data, 4, 1, THREE.RedFormat);
+      tex.minFilter = THREE.NearestFilter;
+      tex.magFilter = THREE.NearestFilter;
+      tex.generateMipmaps = false;
+      tex.needsUpdate = true;
+      toonGradientMap = tex;
+      return toonGradientMap;
+    }
+
+    function applyToonTrialLighting() {
+      if (!TOON_SHADING_TRIAL_ENABLED || !toonShadingOn) {
+        if (clarityOn) {
+          key.intensity = 1.35;
+          fill.intensity = 0.55;
+          rim.intensity = 0.7;
+        } else {
+          key.intensity = 1.1;
+          fill.intensity = 0.35;
+          rim.intensity = 0.45;
+        }
+        return;
+      }
+      // Harder key / weaker fill so MeshToonMaterial bands read clearly.
+      key.intensity = 1.75;
+      fill.intensity = 0.18;
+      rim.intensity = 0.22;
+    }
+
+    async function setToonShadingTrial(on) {
+      if (!TOON_SHADING_TRIAL_ENABLED) {
+        toonShadingOn = false;
+        applyToonTrialLighting();
+        return false;
+      }
+      toonShadingOn = !!on;
+      applyToonTrialLighting();
+      const btn = document.getElementById('btnToon');
+      if (btn) setUtilTile(btn, 'Shading', toonShadingOn ? 'Toon' : 'PBR', toonShadingOn);
+      if (!glbRoot) return true;
+      // Force full material rebuild so body/head swap Standard <-> Toon.
+      characterTexturesOn = false;
+      bodyMatRefs = [];
+      headMatRefs = [];
+      eyeMatRefs = [];
+      await applyCharacterTextures({ hue: irisHue, preview: prefersPreviewTextures() });
+      statusEl.textContent = toonShadingOn
+        ? 'Toon shading trial ON (MeshToonMaterial) — toggle Shading to restore PBR'
+        : 'PBR shading restored';
+      return true;
     }
 
     function makePreviewMat(map, opts) {
@@ -13138,6 +13873,21 @@
       const alphaTest = opts.alphaTest || 0;
       const emissiveHex = opts.emissive != null ? opts.emissive : 0x000000;
       const eInt = opts.emissiveIntensity != null ? opts.emissiveIntensity : 0;
+
+      // TRIAL path — body/head/brow only (opts.toon). Eyes/shine stay MeshStandardMaterial.
+      if (TOON_SHADING_TRIAL_ENABLED && toonShadingOn && opts.toon) {
+        return new THREE.MeshToonMaterial({
+          map: map || null,
+          color: 0xffffff,
+          gradientMap: getToonGradientMap(),
+          transparent,
+          alphaTest,
+          emissive: new THREE.Color(emissiveHex),
+          emissiveIntensity: eInt,
+          side: THREE.FrontSide,
+        });
+      }
+
       const mat = new THREE.MeshStandardMaterial({
         map: map || null,
         color: 0xffffff,
@@ -13282,14 +14032,14 @@
           }
           if (role === 'head') {
             report.head += 1;
-            const mat = makePreviewMat(headFaceMap, { roughnessMap: headRough });
+            const mat = makePreviewMat(headFaceMap, { roughnessMap: headRough, toon: true });
             mat.name = oldMat?.name || 'head';
             headMatRefs.push(mat);
             return mat;
           }
           if (role === 'brow') {
             report.brow += 1;
-            const mat = makePreviewMat(headFaceMap, { transparent: true, alphaTest: 0.15 });
+            const mat = makePreviewMat(headFaceMap, { transparent: true, alphaTest: 0.15, toon: true });
             mat.name = oldMat?.name || 'brow';
             return mat;
           }
@@ -13298,6 +14048,7 @@
             const mat = makePreviewMat(bodyMap, {
               roughnessMap: bodyRough,
               normalMap: bodyNormal,
+              toon: true,
             });
             mat.name = oldMat?.name || 'body';
             bodyMatRefs.push(mat);
@@ -13355,6 +14106,10 @@
 
     async function setTexChoice(id, value) {
       if (!Object.prototype.hasOwnProperty.call(texChoiceValues, id)) return null;
+      if (id === 'hairStyle') {
+        await setHairStyle(value);
+        return texChoiceValues.hairStyle;
+      }
       texChoiceValues[id] = value;
       if (id === 'eyeStyle') {
         if (characterTexturesOn) {
@@ -13376,6 +14131,7 @@
     function setOutlineVisible(on) {
       glbRoot?.traverse((o) => {
         if (!o.isMesh) return;
+        if (o.userData?.isOutlineShell) return;
         if (/outline|cycleoutline/i.test(o.name) || /outline/i.test(o.parent?.name || '')) {
           o.visible = !!on;
         }
@@ -13421,6 +14177,7 @@
         setOutlineVisible(true);
         if (!mapMode && !characterTexturesOn) restoreMaterials();
       }
+      applyToonTrialLighting();
       refreshHud();
       return true;
     }
@@ -14152,6 +14909,20 @@
             positiveLabel: 'hue',
             negativeLabel: 'Outfit tint',
           });
+        } else if (c.type === 'hairHue') {
+          out.push({
+            type: 'hairHue',
+            id: c.id,
+            label: c.label,
+            drive: '',
+            boneMorph: false,
+            value: hairHue,
+            min: c.min ?? 0,
+            max: c.max ?? 1,
+            anim: null,
+            positiveLabel: 'hue',
+            negativeLabel: 'Hair color',
+          });
         } else if (c.type === 'skinParam') {
           const key = SKIN_PARAM_KEYS[c.id];
           out.push({
@@ -14230,6 +15001,8 @@
     async function loadGlbFromUrl(url) {
       showLoadOverlay('boot', 'Loading...');
       statusEl.textContent = 'Loading GLB...';
+      unequipHair();
+      clearOutlineMeshes();
       if (!heightRecipe) await loadHeightRecipe();
       const gltf = await new GLTFLoader().loadAsync(url);
       if (glbRoot) scene.remove(glbRoot);
@@ -14285,6 +15058,15 @@
       rebuildRulers(Math.max(2.0, (lastMetrics?.maxY || 1.5) + 0.3), 0.1);
       frameCharacter(glbRoot);
       setClarityMode(true);
+      setOutlineVisible(false);
+      if (AUTO_EQUIP_HAIR) {
+        try {
+          await setHairStyle(AUTO_EQUIP_HAIR);
+        } catch (err) {
+          console.warn('[hair] auto-equip failed', err);
+        }
+      }
+      if (OUTLINE_TRIAL_ENABLED) await setOutlineTrial(true);
       const animInfo = animList().map((a) => a.name).join(',') || 'none';
       const texBit = texInfo?.ok
         ? ` - tex body=${texInfo.body} brow=${texInfo.brow} eye=${texInfo.eye} head=${texInfo.head}`
@@ -14485,7 +15267,58 @@
     window.sandboxLoadGlb = loadGlbFromUrl;
     window.sandboxSetBbox = (on) => { showBbox = !!on; updateBboxHelper(); return true; };
     window.sandboxSetClarity = setClarityMode;
+    window.sandboxSetToonShading = (on) => setToonShadingTrial(on);
+    window.sandboxGetToonShading = () => !!(TOON_SHADING_TRIAL_ENABLED && toonShadingOn);
+    window.sandboxSetOutline = (on) => setOutlineTrial(!!on);
+    window.sandboxGetOutline = () => !!(OUTLINE_TRIAL_ENABLED && outlineEnabled);
+    window.sandboxSetOutlinePreset = (name) => setOutlinePreset(name);
+    window.sandboxGetOutlinePreset = () => outlinePreset;
+    window.sandboxSetOutlineColor = (hex) => {
+      initOutlinePost();
+      outlineCompMatBest.uniforms.outlineColor.value.set(hex);
+      outlineCompMatSsaa.uniforms.outlineColor.value.set(hex);
+      return outlineCompMatBest.uniforms.outlineColor.value.getHex();
+    };
+    window.sandboxSetOutlinePx = (px) => {
+      initOutlinePost();
+      outlinePx = Math.max(0.5, Math.min(6, +px || outlinePx));
+      outlineCompMatBest.uniforms.thickness.value = outlinePx;
+      outlineCompMatSsaa.uniforms.thickness.value = outlinePx;
+      return outlinePx;
+    };
+    window.sandboxSetHairStyle = (id) => setHairStyle(id);
+    window.sandboxDebugOutlineMask = () => {
+      if (!glbRoot) return { ok: false };
+      const kept = [];
+      const skipped = [];
+      glbRoot.traverse((o) => {
+        if (!o.isMesh) return;
+        const row = {
+          name: o.name,
+          skinned: !!o.isSkinnedMesh,
+          visible: !!o.visible,
+          apparel: o.userData?.apparel || null,
+          role: materialRole(Array.isArray(o.material) ? o.material[0]?.name : o.material?.name)
+            || materialRole(o.name)
+            || o.userData?.outlineRole
+            || null,
+        };
+        if (meshContributesToOutlineMask(o)) kept.push(row);
+        else skipped.push(row);
+      });
+      return {
+        ok: true,
+        kept: kept.length,
+        skipped: skipped.length,
+        hairMeshes: hairMeshes.length,
+        keptNames: kept.map((k) => k.name),
+        skippedNames: skipped.map((k) => `${k.name}|${k.role}|${k.apparel || '-'}`),
+        hairKept: kept.filter((k) => k.apparel === 'hair' || k.role === 'hair'),
+      };
+    };
     window.sandboxSetIrisHue = (h) => setIrisHue(h);
+    window.sandboxSetHairHue = (h) => setHairHue(h);
+    window.sandboxGetHairHue = () => hairHue;
     window.sandboxSetUnderwearHue = (h) => setUnderwearHue(h);
     window.sandboxGetUnderwearHue = () => underwearHue;
     window.sandboxSetSkinParam = (id, value) => setSkinParam(id, value);
@@ -14750,6 +15583,8 @@
       camera.aspect = innerWidth / innerHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(innerWidth, innerHeight, false);
+      outlineTargetsW = 0;
+      outlineTargetsH = 0;
       if (mapMode === 'region') colorByBoneRegions();
     });
 
@@ -14781,7 +15616,7 @@
       updateBlink(dt);
       // mul/compose when not playing: only via applyHeight() / animSeek (need fresh mixer sample)
       if (controls.enabled) controls.update();
-      renderer.render(scene, camera);
+      renderWithOutline();
     })();
     refreshHud();
     statusEl.textContent = 'Waiting for GLB...';
@@ -14808,6 +15643,10 @@
     const btnAnim = document.getElementById('btnAnim');
     const btnCam = document.getElementById('btnCam');
     const btnOrbit = document.getElementById('btnOrbit');
+    const btnToon = document.getElementById('btnToon');
+    const btnOutline = document.getElementById('btnOutline');
+    if (btnToon && !TOON_SHADING_TRIAL_ENABLED) btnToon.style.display = 'none';
+    if (btnOutline && !OUTLINE_TRIAL_ENABLED) btnOutline.style.display = 'none';
 
     let uiControls = [];
     let uiSelectedKey = null;
@@ -14843,7 +15682,7 @@
     function controlsForTiles(categoryId) {
       const all = window.sandboxListMorphControls?.(categoryId) || [];
       if (OPTION_TILE_CATEGORIES.has(categoryId)) {
-        return all.filter((c) => c.type !== 'choice' && c.type !== 'outfitHue');
+        return all.filter((c) => c.type !== 'choice' && c.type !== 'outfitHue' && c.type !== 'hairHue');
       }
       return all;
     }
@@ -14858,6 +15697,7 @@
       if (c.type === 'genderPair') return 0.5;
       if (c.type === 'iris') return 0.58;
       if (c.type === 'outfitHue') return 0.5;
+      if (c.type === 'hairHue') return 0.55;
       if (c.type === 'skinParam') {
         const def = MORPH_CATEGORIES.flatMap((cat) => cat.controls).find((x) => x.id === c.id);
         return def?.defaultValue ?? 0;
@@ -15028,6 +15868,16 @@
             max: 1,
           });
         }
+        if (uiCategoryId === 'hair' && texChoiceValues.hairStyle && texChoiceValues.hairStyle !== 'none') {
+          appendSliderCard({
+            type: 'hairHue',
+            id: 'hairHue',
+            label: 'Hair color',
+            value: hairHue,
+            min: 0,
+            max: 1,
+          });
+        }
         return;
       }
 
@@ -15055,6 +15905,7 @@
         INLINE_SLIDER_CATEGORIES.has(uiCategoryId)
         || uiCategoryId === 'eyeStyle'
         || uiCategoryId === 'outfit'
+        || uiCategoryId === 'hair'
         || uiCategoryId === 'bodyColor'
         || uiCategoryId === 'randomizer'
       ) return null;
@@ -15102,6 +15953,9 @@
       } else if (c.type === 'outfitHue') {
         window.sandboxSetUnderwearHue?.(t);
         c.value = t;
+      } else if (c.type === 'hairHue') {
+        window.sandboxSetHairHue?.(t);
+        c.value = t;
       } else if (c.type === 'skinParam') {
         window.sandboxSetSkinParam?.(c.id, t);
       } else if (c.type === 'choice') {
@@ -15114,7 +15968,7 @@
       } else if (c.type === 'axis') {
         window.sandboxSetShapeAxis(c.id, t);
       }
-      if (c.type !== 'choice' && c.type !== 'iris' && c.type !== 'outfitHue') c.value = t;
+      if (c.type !== 'choice' && c.type !== 'iris' && c.type !== 'outfitHue' && c.type !== 'hairHue') c.value = t;
       updateSliderBubble();
     }
 
@@ -15129,6 +15983,7 @@
           INLINE_SLIDER_CATEGORIES.has(uiCategoryId)
             || uiCategoryId === 'eyeStyle'
             || uiCategoryId === 'outfit'
+            || uiCategoryId === 'hair'
             || uiCategoryId === 'bodyColor'
             || uiCategoryId === 'randomizer',
         );
@@ -15508,6 +16363,20 @@
         window.sandboxSetFixedCamera?.(!uiOrbit);
         setUtilTile(btnOrbit, 'Lock Camera', uiOrbit ? 'OFF' : 'ON', !uiOrbit);
       });
+      btnToon?.addEventListener('click', async () => {
+        if (!TOON_SHADING_TRIAL_ENABLED) return;
+        await setToonShadingTrial(!toonShadingOn);
+      });
+      if (btnToon && TOON_SHADING_TRIAL_ENABLED) {
+        setUtilTile(btnToon, 'Shading', toonShadingOn ? 'Toon' : 'PBR', toonShadingOn);
+      }
+      btnOutline?.addEventListener('click', async () => {
+        if (!OUTLINE_TRIAL_ENABLED) return;
+        await setOutlineTrial(!outlineEnabled);
+      });
+      if (btnOutline && OUTLINE_TRIAL_ENABLED) {
+        setUtilTile(btnOutline, 'Outline', outlineEnabled ? 'ON' : 'OFF', outlineEnabled);
+      }
       fillCategories();
       lockPanelHeightFromEyes();
       setUtilTile(btnOrbit, 'Lock Camera', 'OFF', false);

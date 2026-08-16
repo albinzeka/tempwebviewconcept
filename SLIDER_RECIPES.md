@@ -99,7 +99,7 @@ Head size (Bn): visual base `HEAD_BASE = 1.2` at slider 0; then ×`(1 + 0.2 · h
 | Control | Bone(s) | Mode · axis | Span |
 |---------|---------|-------------|------|
 | Eye forward | `CTRL-DEF-eye_master` | scl · Y | ×1.0…1.2 |
-| Eye distance | `CTRL-eye_master.L/R` | scl · X | amp 0.002 (L− / R+) |
+| Eye distance | `CTRL-eye_master.L/R` | pos · X | amp 0.012 · slider −0.2…0.3 (L+ / R− → wider) |
 | Eye size horizontal | `CTRL-eye_master.L/R` | scl · X | amp 0.1 |
 | Eye size vertical | `CTRL-eye_master.L/R` | scl · Z | amp 0.2 |
 | Lid root scale Z | `CTRL-DEF-lid.L/R` | scl · Z | amp 0.1 |
@@ -122,7 +122,7 @@ Head size (Bn): visual base `HEAD_BASE = 1.2` at slider 0; then ×`(1 + 0.2 · h
 | Lower nose width | `CTRL-ORG-nose_master` | scl · X | ×0.72…1.5 |
 | Lower nose angle | `CTRL-ORG-nose_master` | rot · X | −0.15…0.1 rad |
 | Nose ridge width | `CTRL-DEF-nose_ridge` | scl · X | ×0.25…1.6 |
-| Nose volume | `CTRL-DEF-nose_master` | scl · Z | ×0.8…1.2 |
+| Nose volume | `CTRL-DEF-nose_master` | scl · Z | ×0.8…1.2 · slider **−0.4…0.4** |
 | Nose vertical position | `CTRL-DEF-nose_master` | pos · Z | amp 0.002 |
 
 ### Cheeks
@@ -144,9 +144,9 @@ Head size (Bn): visual base `HEAD_BASE = 1.2` at slider 0; then ×`(1 + 0.2 · h
 | Jaw forward/backward | `CTRL-DEF-jaw_master` | scl · Y | ×0.9…1.1 |
 | Jaw and chin width | `CTRL-DEF-jaw_master` | scl · X | ×0.9…1.1 |
 | Chin vertical size | `CTRL-DEF-jaw_master` | scl · Z | ×0.8…1.05 |
-| Upper lip width | `CTRL-DEF-upperlip` | scl · X | ×1.0…1.5 |
-| Lower lip width | `CTRL-DEF-lowerlip` | scl · X | ×1.0…1.5 |
-| Lips forward/backward | upper + lower lip | scl · Y | ×1.0…1.2 |
+| Upper lip width | `CTRL-DEF-upperlip` | scl · X | ×1.0…1.5 · slider **0…0.3** |
+| Lower lip width | `CTRL-DEF-lowerlip` | scl · X | ×1.0…1.5 · slider **0…0.3** |
+| Lips forward/backward | upper + lower lip | scl · Y | ×1.0…1.35 · slider **0…1.3** |
 
 ### Body fatty
 
@@ -233,7 +233,6 @@ Body shapes order: Gender → Torso → Breast size (Bn) → Breast volume (Bn) 
 | Mouth corner shape | Mouth Corners Up | Mouth Corners Down @0.4 |
 | Upper lip size | Full Top Lip @0.4 | Thin Top Lip @0.4 |
 | Bottom lip size | Full Bottom Lip @0.2 | Thin Bottom Lip @0.7 |
-| Lip Bulge | Top Lip Out @0.4 + Bottom Lip Out @0.4 | — |
 | Cupids Bow shape | Remove Cupids Bow | — |
 
 ### Nose (Sk)
@@ -243,8 +242,7 @@ Body shapes order: Gender → Torso → Breast size (Bn) → Breast volume (Bn) 
 | Nose width | Small Nose @1 | Small Nose @−1 |
 | Nose scale | Large Nose @0.5 | Large Nose @−0.5 |
 | Nose vertical | Long Nose @0.5 | Short Nose @0.5 |
-| Nose tilt | Upturned Nose @0.5 | Downturned Nose @0.5 |
-| Nose Bridge | Bridge Out | Bridge In |
+| Nose Bridge | Bridge Out | Bridge In · slider **±0.3** |
 | Nose tip shape | Button Nose @0.8 | Pointy Nose @0.8 |
 | Nose tip length | Pinocchio @0.6 | — |
 | Nose depth | Nose Out @0.2 | Nose In @0.2 |
@@ -292,13 +290,68 @@ Category **Randomizer** shows one **Gender expression** slider (0 = feminine, 1 
 | `neutral` | belly, torso, most face, iris, body width/thickness | Full / correlated random |
 | `skip` | gender pair, **height**, fangs, tongue | Unchanged |
 
-**Correlated torso:** `chestWidth` / `waistWidth` / `hipWidth` share a base and stay within **±0.20** of it (same for chest/waist/hip **thickness**). Shoulders/lats/hipBone/legs use a looser ±0.16 group.
+**Face soft:** head/eyes/brows/jaw/ears/specials sample bipolar Sk inside **±0.32** and face Bn forms inside **±0.35**. **Mouth + nose** use full control range (harder), except upper/lower lip width (Bn) and nose scale (Sk) which stay soft. Materials category is not randomized.
 
-**Big belly:** skewed toward **0** (`preferLow` — mid already looks fat).
+**Unipolar 0…1 shapekeys** (no negative twin — e.g. Pointy ear, monolid, flatten nose, big belly):
+- Usually **0…0.10** (not mid 0.5)
+- ~8% of rolls can reach up to **0.70**
+
+**Correlated torso:** `chestWidth` / `waistWidth` / `hipWidth` share a base and stay within **±0.20** of it (same for chest/waist/hip **thickness**). Shoulders/lats/hipBone/legs use a looser ±0.16 group.
 
 **Muscle vs fat:** if `muscular_morph` **> 0.40**, then `big_belly` ≤ **0.05** and chest/waist/hip thickness ≤ **+0.20**.
 
+**Gender expression floors** (after sampling; `g` = Gender expression 0 fem … 1 masc):
+
+| When | Floors / caps |
+|------|----------------|
+| Always | Glute size (Bn) ≥ **0.20** |
+| Near full female (`g` ≤ 0.15) | Hip bone ≥ **0.30**; Chest thickness ≤ **0.10**; Breast size ≥ **0.10**; Breast volume ≥ **0.50**; Butt roundness (Sk) ≥ **0.10** |
+| Near full male (`g` ≥ 0.85) | Head shape / Lower face length ≥ **−0.20**; Shoulder width ≥ **0**; Chest width ≥ **0.20**; Chest thickness ≥ **0**; Lats width ≥ **0**; Hip bone ≤ **0.20**; Arm size ≥ **−0.30**; Muscular morph ≥ **−0.70**; Breast roundness (Sk) = **0** |
+
 **Head size:** ±0.12 only. Height stays fixed.
+
+---
+
+## Materials textures
+
+Pack under `assets/textures/`:
+
+| Slot | Path pattern | Notes |
+|------|--------------|-------|
+| Skin diffuse | `body/main/diffuse/*`, `face/main/diffuse/*` | Caucasian / Black baked, or **White + SkinDepth OKLCH** (luminance detail) |
+| Body rough / normal | `body/main/roughness`, `body/main/normalmap` | Always on body — **not** used for redness |
+| Head rough | `face/main/roughness` | Head has no normal in pack |
+| Face overlays | `face/overlays/{makeup,extra,eyebrows}` | Makeup/extra = alpha; eyebrows = white-key |
+| Body overlays | `body/overlays/extra`, `body/overlays/underwear/<Item>/` | Underwear: `*_D` composited; `*_N`/`*_R` available |
+| Eyes | `eyes/{TOON,REAL,SNAKE}_*` + shine | Iris hue tints chosen style |
+
+**Skin params** (Custom White base):
+
+| Param | Range | Role |
+|-------|-------|------|
+| Skin depth | 0…1 | OKLCH anchors (fair→deep); interpolated |
+| Warmth | −1…1 | Hue += Warmth × 18° |
+| Redness | −1…1 | Hue −= Redness × 10°; Chroma += max(Redness,0)×0.015 |
+| Saturation | 0…1.5 | Multiplies chroma |
+| Lip pink / strength | 0…1 | Head only, via `face/main/diffuse/Lip_Mask.png` (same UV as White_Head_D) |
+
+White albedo is **luminance detail**, not RGB multiply:
+
+`FinalL = SkinL + (TextureL − 0.85) × 0.35` then `OKLCH(FinalL, SkinC, FinalH)` → sRGB.
+
+**Lips:** prefer a grayscale **lip mask** (same head UV; white = lips) + Lip pink/strength. You do **not** need a full separate lip albedo — mask + OKLCH is enough. Fair Skin depth auto-boosts lip influence.
+
+---
+
+## Blink overlay (`anim_blink`)
+
+App-driven shapekey blink (not a bone Action):
+
+- Key name: **`anim_blink`** (0 = open, 1 = closed)
+- Applied every frame after mixer + form CTRLs so lids follow eye bones
+- Auto interval ~1.6–5s with occasional double-blink
+- Console: `[blink] overlay on "anim_blink"` when the key exists in the GLB
+- Debug: `sandboxBlinkNow()`, `sandboxSetBlink(false)`, `sandboxGetBlink()`
 
 ---
 
