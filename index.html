@@ -10895,6 +10895,7 @@
     };
     let hairRoot = null;
     let hairMeshes = [];
+    const hairBoneBindPose = new Map();
     let outlineEnabled = true;
     let outlineColorRT = null;
     let outlineMaskRT = null;
@@ -10923,18 +10924,55 @@
       return new URL(`./models/${file}?v=${rev}`, import.meta.url).href;
     }
 
+    function findCharacterSkeleton(root) {
+      let skel = null;
+      root?.traverse((o) => {
+        if (skel) return;
+        if (!o.isSkinnedMesh || !o.skeleton) return;
+        if (o.userData.apparel === 'hair') return;
+        skel = o.skeleton;
+      });
+      return skel || findSkeleton(root);
+    }
+
+    function snapshotHairBoneBindPose() {
+      if (!glbRoot || hairBoneBindPose.size) return;
+      glbRoot.traverse((o) => {
+        if (!o?.name || !parseHairBone(o.name)) return;
+        hairBoneBindPose.set(o.name, {
+          quaternion: o.quaternion.clone(),
+          position: o.position.clone(),
+        });
+      });
+    }
+
+    function resetHairBonesToBindPose() {
+      if (!glbRoot || !hairBoneBindPose.size) return;
+      glbRoot.traverse((o) => {
+        const rest = hairBoneBindPose.get(o.name);
+        if (!rest) return;
+        o.quaternion.copy(rest.quaternion);
+        o.position.copy(rest.position);
+      });
+      glbRoot.updateMatrixWorld(true);
+    }
+
     function retargetSkinnedMeshToSkeleton(mesh, targetSkeleton) {
       if (!mesh?.isSkinnedMesh || !mesh.skeleton || !targetSkeleton) return false;
+      const strip = (n) => String(n || '').replace(/\./g, '');
       const byName = new Map();
       for (const b of targetSkeleton.bones) {
-        if (b?.name) byName.set(b.name, b);
+        if (!b?.name) continue;
+        if (!byName.has(b.name)) byName.set(b.name, b);
+        const s = strip(b.name);
+        if (s && !byName.has(s)) byName.set(s, b);
       }
       const bones = [];
       const inverses = [];
       let missing = 0;
       for (let i = 0; i < mesh.skeleton.bones.length; i++) {
         const src = mesh.skeleton.bones[i];
-        const dst = byName.get(src.name);
+        const dst = byName.get(src.name) || byName.get(strip(src.name));
         if (dst) bones.push(dst);
         else {
           missing += 1;
@@ -10943,7 +10981,9 @@
         inverses.push(mesh.skeleton.boneInverses[i].clone());
       }
       if (missing) console.warn('[hair] retarget missing bones:', missing);
-      mesh.bind(new THREE.Skeleton(bones, inverses), mesh.bindMatrix);
+      const bindMat = mesh.bindMatrix ? mesh.bindMatrix.clone() : new THREE.Matrix4();
+      mesh.bind(new THREE.Skeleton(bones, inverses), bindMat);
+      mesh.bindMode = 'attached';
       mesh.normalizeSkinWeights?.();
       return true;
     }
@@ -11080,6 +11120,7 @@
       hairRoot = null;
       hairMeshes = [];
       texChoiceValues.hairStyle = 'none';
+      resetHairBonesToBindPose();
     }
 
     async function setHairStyle(styleId) {
@@ -11096,12 +11137,14 @@
         console.warn('[hair] unknown style', id);
         return { ok: false, reason: 'unknown' };
       }
-      const charSkel = findSkeleton(glbRoot);
+      const charSkel = findCharacterSkeleton(glbRoot);
       if (!charSkel) {
         console.warn('[hair] character skeleton missing');
         statusEl.textContent = 'Hair failed: no character skeleton';
         return { ok: false, reason: 'no-skel' };
       }
+      snapshotHairBoneBindPose();
+      resetHairBonesToBindPose();
       statusEl.textContent = `Loading hair (${id})…`;
       try {
         const gltf = await new GLTFLoader().loadAsync(url);
@@ -11120,7 +11163,11 @@
         const meshes = [];
         for (const o of sourced) {
           o.parent?.remove(o);
-          o.updateMatrix();
+          hairRoot.add(o);
+        }
+        glbRoot.add(hairRoot);
+        glbRoot.updateMatrixWorld(true);
+        for (const o of sourced) {
           retargetSkinnedMeshToSkeleton(o, charSkel);
           const oldMat = Array.isArray(o.material) ? o.material[0] : o.material;
           o.material = makeHairMaterial(oldMat);
@@ -11129,11 +11176,10 @@
           o.userData.outlineRole = 'hair';
           o.castShadow = false;
           o.visible = true;
+          o.skeleton?.update();
           meshes.push(o);
-          hairRoot.add(o);
         }
         hairMeshes = meshes;
-        glbRoot.add(hairRoot);
         charSkel.update();
         const morphMeshes = registerHairShapeKeyMeshes();
         for (const m of meshes) {
@@ -11473,7 +11519,7 @@
         seen.add(nameKey);
         bones.push(o);
       };
-      const skel = findSkeleton(glbRoot);
+      const skel = findCharacterSkeleton(glbRoot);
       if (skel) {
         for (const b of skel.bones) add(b);
       }
@@ -11490,6 +11536,7 @@
       _boneNameCache = null;
       _skirtColliderBones = null;
       if (!glbRoot) return 0;
+      snapshotHairBoneBindPose();
       glbRoot.updateMatrixWorld(true);
 
       for (const bone of collectSpringBones()) {
@@ -11497,7 +11544,8 @@
         if (!parsed) continue;
 
         const childBone = bone.children?.find((c) => c.isBone);
-        const restLocalRotation = bone.quaternion.clone();
+        const bind = hairBoneBindPose.get(bone.name);
+        const restLocalRotation = (bind?.quaternion || bone.quaternion).clone();
         let boneAxis;
         let boneLength;
         if (childBone) {
@@ -11556,7 +11604,9 @@
       if (!glbRoot) return;
       glbRoot.updateMatrixWorld(true);
       for (const j of hairSpringJoints) {
-        j.restLocalRotation.copy(j.bone.quaternion);
+        const bind = hairBoneBindPose.get(j.bone.name);
+        if (bind) j.restLocalRotation.copy(bind.quaternion);
+        else j.restLocalRotation.copy(j.bone.quaternion);
         _hsTmpV.copy(j.boneAxis).multiplyScalar(j.boneLength).applyMatrix4(j.bone.matrixWorld);
         j.currentTail.copy(_hsTmpV);
         j.prevTail.copy(_hsTmpV);
@@ -11575,7 +11625,7 @@
 
     function updateHairFlow(dt) {
       if (!hairFlowEnabled || !hairFlowReady || !glbRoot) return;
-      if (!_cachedHairSkeleton) _cachedHairSkeleton = findSkeleton(glbRoot);
+      if (!_cachedHairSkeleton) _cachedHairSkeleton = findCharacterSkeleton(glbRoot);
       const skel = _cachedHairSkeleton;
       if (_hairHasSkirt) rebuildSkirtColliders();
       let remaining = Math.min(dt, 0.1);
@@ -13459,7 +13509,7 @@
 
     // -- Character preview textures (body / head / overlays / eyes) --
     // Bump when publishing so GitHub Pages / browser caches cannot keep an old GLB or PNG.
-    const ASSET_REV = '20260817x';
+    const ASSET_REV = '20260817z';
     const textureLoader = new THREE.TextureLoader();
     const TEX_URL = (file) => {
       const enc = String(file || '').split('/').map(encodeURIComponent).join('/');
@@ -16027,6 +16077,7 @@
       statusEl.textContent = 'Loading GLB...';
       unequipHair();
       clearHairFlowState();
+      hairBoneBindPose.clear();
       clearOutlineMeshes();
       if (!heightRecipe) await loadHeightRecipe();
       const gltf = await new GLTFLoader().loadAsync(url);
@@ -16087,15 +16138,17 @@
       frameCharacter(glbRoot);
       setClarityMode(true);
       setOutlineVisible(false);
+      snapshotHairBoneBindPose();
       if (AUTO_EQUIP_HAIR) {
         try {
           await setHairStyle(AUTO_EQUIP_HAIR);
         } catch (err) {
           console.warn('[hair] auto-equip failed', err);
         }
+      } else {
+        glbRoot.updateMatrixWorld(true);
+        initHairFlow();
       }
-      glbRoot.updateMatrixWorld(true);
-      initHairFlow();
       if (OUTLINE_TRIAL_ENABLED) await setOutlineTrial(true);
       const animInfo = animList().map((a) => a.name).join(',') || 'none';
       const texBit = texInfo?.ok
