@@ -473,6 +473,48 @@
     #morphPanel .util-tile.active .util-k { color: #d6e4ff; }
     #morphPanel .ctrl-tile.active,
     #morphPanel .util-tile.active { background: #3d6df0; border-color: #3d6df0; color: #fff; }
+    #morphPanel .local-tex-row {
+      grid-column: span 2;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      padding: 7px 8px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 6px;
+      font-size: 10px;
+      color: #aab;
+      text-align: left;
+    }
+    #morphPanel .local-tex-row .local-tex-label { font-weight: 650; color: #ccd; font-size: 11px; }
+    #morphPanel .local-tex-row .local-tex-hint { line-height: 1.35; opacity: 0.92; }
+    #morphPanel .local-tex-row .local-tex-name {
+      color: #8fd48f;
+      word-break: break-all;
+      font-size: 10px;
+    }
+    #morphPanel .local-tex-row .local-tex-name.empty { color: #777; font-style: italic; }
+    #morphPanel .local-tex-row .local-tex-actions {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 6px;
+    }
+    #morphPanel .local-tex-row .local-tex-actions button {
+      min-height: 32px;
+      padding: 6px 8px;
+      font-size: 11px;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      background: rgba(255, 255, 255, 0.06);
+      color: #e8e8e8;
+      cursor: pointer;
+    }
+    #morphPanel .local-tex-row .local-tex-actions button:hover { background: rgba(255, 255, 255, 0.1); }
+    #morphPanel .local-tex-row .local-tex-actions button.local-tex-clear {
+      width: 32px;
+      padding: 0;
+      color: #c88;
+    }
     #morphPanel .slider-row {
       display: grid;
       grid-template-columns: 38px minmax(0, 1fr);
@@ -838,6 +880,96 @@
       }
     }
     rebuildRulers(2.0, 0.1);
+
+    // Turntable wrapper: horizontal drag spins the CHARACTER (world-space springs
+    // then trail). Vertical drag still tilts the camera. Matches prefab viewer.
+    const avatarRoot = new THREE.Group();
+    avatarRoot.name = 'avatarRoot';
+    scene.add(avatarRoot);
+    let avatarYaw = 0;
+    let _turntableDragging = false;
+    let _turntableAxis = null;
+    let _turntableLastX = 0;
+    let _turntableLastY = 0;
+    let _turntableAccumX = 0;
+    let _turntableAccumY = 0;
+    const TURNTABLE_YAW_SPEED = 0.01;
+    const TURNTABLE_PITCH_SPEED = 0.008;
+    const TURNTABLE_AXIS_LOCK_PX = 10;
+    controls.enableRotate = false;
+    controls.mouseButtons.LEFT = null;
+    controls.touches.ONE = null;
+
+    function resetAvatarRotation() {
+      avatarYaw = 0;
+      avatarRoot.rotation.set(0, 0, 0);
+      if (typeof resetHairFlowLag === 'function') resetHairFlowLag();
+    }
+
+    function attachGlbToAvatar(root) {
+      if (!root) return;
+      avatarRoot.add(root);
+      avatarYaw = 0;
+      avatarRoot.rotation.set(0, 0, 0);
+    }
+
+    function detachGlbFromAvatar(root) {
+      if (!root) return;
+      if (root.parent === avatarRoot) avatarRoot.remove(root);
+      else if (root.parent) root.parent.remove(root);
+    }
+
+    function wireTurntableDrag() {
+      const el = canvas;
+      if (!el || el.dataset.turntableWired) return;
+      el.dataset.turntableWired = '1';
+      const onDown = (e) => {
+        if (e.button != null && e.button !== 0) return;
+        if (e.target.closest?.('#morphPanel, #hud, #whatsNewBtn, #whatsNewPanel, #loadOverlay')) return;
+        _turntableDragging = true;
+        _turntableAxis = null;
+        _turntableAccumX = 0;
+        _turntableAccumY = 0;
+        _turntableLastX = e.clientX;
+        _turntableLastY = e.clientY;
+        controls.enableRotate = false;
+      };
+      const onMove = (e) => {
+        if (!_turntableDragging) return;
+        const dx = e.clientX - _turntableLastX;
+        const dy = e.clientY - _turntableLastY;
+        _turntableLastX = e.clientX;
+        _turntableLastY = e.clientY;
+        _turntableAccumX += dx;
+        _turntableAccumY += dy;
+        if (!_turntableAxis) {
+          if (Math.abs(_turntableAccumX) < TURNTABLE_AXIS_LOCK_PX
+            && Math.abs(_turntableAccumY) < TURNTABLE_AXIS_LOCK_PX) return;
+          _turntableAxis = Math.abs(_turntableAccumX) >= Math.abs(_turntableAccumY) ? 'yaw' : 'pitch';
+        }
+        if (_turntableAxis === 'yaw') {
+          avatarYaw += dx * TURNTABLE_YAW_SPEED;
+          avatarRoot.rotation.y = avatarYaw;
+          avatarRoot.updateMatrixWorld(true);
+        } else if (controls.enabled) {
+          const sph = new THREE.Spherical().setFromVector3(
+            camera.position.clone().sub(controls.target),
+          );
+          sph.phi = THREE.MathUtils.clamp(sph.phi + dy * TURNTABLE_PITCH_SPEED, 0.12, Math.PI - 0.12);
+          camera.position.copy(controls.target).add(new THREE.Vector3().setFromSpherical(sph));
+          camera.lookAt(controls.target);
+        }
+      };
+      const onUp = () => {
+        _turntableDragging = false;
+        _turntableAxis = null;
+      };
+      el.addEventListener('pointerdown', onDown);
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp);
+      window.addEventListener('pointercancel', onUp);
+    }
+    wireTurntableDrag();
 
     let glbRoot = null;
     let heightRoot = null;
@@ -1453,11 +1585,11 @@
     ];
     const RANDOMIZE_SKIP_CATS = new Set([
       'randomizer', 'presets', 'eyeStyle', 'eyebrowsTex', 'makeupTex',
-      'faceOverlay', 'bodyColor', 'bodyArt', 'outfit', 'hair',
+      'faceOverlay', 'bodyColor', 'bodyArt', 'outfit', 'hair', 'manualTexLoad',
     ]);
     const TEXTURE_CATEGORY_IDS = new Set([
       'eyeStyle', 'eyebrowsTex', 'makeupTex', 'faceOverlay',
-      'bodyColor', 'bodyArt', 'outfit', 'hair',
+      'bodyColor', 'bodyArt', 'outfit', 'hair', 'manualTexLoad',
     ]);
     /** Choice-only categories: options render as tiles (not a separate Option row). */
     const OPTION_TILE_CATEGORIES = new Set([
@@ -1474,7 +1606,7 @@
       'randomizer',
       'headShapes', 'eyes', 'eyeStyle', 'eyebrowsTex', 'brows', 'hair', 'jaw', 'mouth', 'nose', 'ears',
       'makeupTex', 'faceOverlay', 'specials',
-      'bodyBones', 'bodyShapes', 'bodyColor', 'bodyArt', 'outfit',
+      'bodyBones', 'bodyShapes', 'bodyColor', 'bodyArt', 'outfit', 'manualTexLoad',
     ];
     const MORPH_CATEGORIES = [
       {
@@ -1603,6 +1735,12 @@
         ],
       },
       {
+        id: 'manualTexLoad',
+        label: 'Manual texture load',
+        group: 'ungrouped',
+        controls: [],
+      },
+      {
         id: 'bodyShapes',
         label: 'Body shapes',
         group: 'body',
@@ -1698,7 +1836,6 @@
             ],
             defaultValue: 'none',
           },
-          { type: 'hairHue', id: 'hairHue', label: 'Hair hue', min: 0, max: 1, defaultValue: 0.55 },
         ],
       },
       {
@@ -2114,6 +2251,9 @@
       if (c.type === 'outfitHue' || c.type === 'hairHue') {
         return { min: c.min ?? 0, max: c.max ?? 1 };
       }
+      if (c.type === 'irisAdjust' || c.type === 'hairAdjust') {
+        return { min: c.min ?? -0.5, max: c.max ?? 0.5 };
+      }
       if (c.type === 'skinParam') {
         return { min: c.min ?? 0, max: c.max ?? 1 };
       }
@@ -2369,6 +2509,12 @@
       });
       texChoiceValues.skinTone = 'caucasian';
       irisHue = 0.58;
+      irisColorMode = 'preset';
+      irisPreset = 'blue';
+      irisAdjust = { brightness: 0, contrast: 0, saturation: 0 };
+      hairColorMode = 'preset';
+      hairPreset = 'black';
+      hairAdjust = { brightness: 0, contrast: 0, saturation: 0 };
       setHairHue(0.55);
       for (const cat of MORPH_CATEGORIES) {
         for (const c of cat.controls) {
@@ -2379,6 +2525,7 @@
       }
       underwearHue = 0.5;
       unequipHair();
+      clearAllLocalTex();
       invalidateSkinBakeCache();
       texturePreviewMode = false;
       previewDirty.body = false;
@@ -10802,10 +10949,51 @@
     }
 
     function hairColorFromHue(h) {
-      const c = new THREE.Color();
-      const hue = Math.max(0, Math.min(1, +h || 0));
-      c.setHSL(hue, 0.62, 0.58);
-      return c;
+      return resolveHairColor();
+    }
+
+    const HAIR_PRESETS = {
+      black: { h: 0.0, s: 0.06, l: 0.14 },
+      brown: { h: 0.07, s: 0.58, l: 0.30 },
+      blonde: { h: 0.11, s: 0.62, l: 0.68 },
+      red: { h: 0.02, s: 0.78, l: 0.44 },
+      teal: { h: 0.52, s: 0.72, l: 0.50 },
+      pink: { h: 0.93, s: 0.58, l: 0.66 },
+    };
+
+    function applyColorAdjust(col, adj) {
+      const a = adj || {};
+      let r = col.r;
+      let g = col.g;
+      let b = col.b;
+      const br = clampRange(a.brightness, -0.5, 0.5);
+      r = clamp01(r + br);
+      g = clamp01(g + br);
+      b = clamp01(b + br);
+      const ct = 1 + clampRange(a.contrast, -0.5, 0.5);
+      r = clamp01((r - 0.5) * ct + 0.5);
+      g = clamp01((g - 0.5) * ct + 0.5);
+      b = clamp01((b - 0.5) * ct + 0.5);
+      const out = new THREE.Color(r, g, b);
+      const hsl = { h: 0, s: 0, l: 0 };
+      out.getHSL(hsl);
+      hsl.s = clamp01(hsl.s * (1 + clampRange(a.saturation, -0.5, 0.5)));
+      out.setHSL(hsl.h, hsl.s, hsl.l);
+      return out;
+    }
+
+    function resolveHairColor() {
+      let col;
+      if (hairColorMode === 'preset') {
+        const p = HAIR_PRESETS[hairPreset] || HAIR_PRESETS.black;
+        col = new THREE.Color().setHSL(p.h, p.s, p.l);
+      } else {
+        col = new THREE.Color();
+        const sat = 0.45 + Math.abs(Math.sin(hairHue * Math.PI * 2)) * 0.48;
+        const lit = 0.22 + Math.abs(Math.cos(hairHue * Math.PI * 1.5)) * 0.48;
+        col.setHSL(hairHue, sat, lit);
+      }
+      return applyColorAdjust(col, hairAdjust);
     }
 
     function applyHairHueToMeshes() {
@@ -10824,6 +11012,27 @@
       return hairHue;
     }
 
+    function setHairColorMode(mode) {
+      hairColorMode = mode === 'hue' ? 'hue' : 'preset';
+      applyHairHueToMeshes();
+      if (typeof buildCtrlTiles === 'function') buildCtrlTiles();
+      return hairColorMode;
+    }
+
+    function setHairPreset(id) {
+      if (HAIR_PRESETS[id]) hairPreset = id;
+      applyHairHueToMeshes();
+      if (typeof buildCtrlTiles === 'function') buildCtrlTiles();
+      return hairPreset;
+    }
+
+    function setHairAdjust(key, value) {
+      if (!Object.prototype.hasOwnProperty.call(hairAdjust, key)) return null;
+      hairAdjust[key] = clampRange(value, -0.5, 0.5);
+      applyHairHueToMeshes();
+      return hairAdjust[key];
+    }
+
     function makeHairMaterial(srcMat) {
       const mat = new THREE.MeshStandardMaterial({
         color: hairColorFromHue(hairHue),
@@ -10836,7 +11045,30 @@
       return mat;
     }
 
+    function unregisterHairShapeKeyMeshes() {
+      if (!hairMeshes.length) return;
+      const hairSet = new Set(hairMeshes);
+      shapeKeyMeshes = shapeKeyMeshes.filter((m) => !hairSet.has(m));
+    }
+
+    /** Hair GLB shares head shapekeys — keep morph influences in sync with body/head. */
+    function registerHairShapeKeyMeshes() {
+      let added = 0;
+      for (const m of hairMeshes) {
+        if (!m?.morphTargetDictionary || !m.morphTargetInfluences) continue;
+        if (shapeKeyMeshes.includes(m)) continue;
+        shapeKeyMeshes.push(m);
+        added++;
+      }
+      if (added > 0) {
+        applyAllShapeKeys();
+        applyAllShapeAxes();
+      }
+      return added;
+    }
+
     function unequipHair() {
+      unregisterHairShapeKeyMeshes();
       if (hairRoot) {
         hairRoot.parent?.remove(hairRoot);
         hairRoot.traverse((o) => {
@@ -10855,6 +11087,8 @@
       unequipHair();
       texChoiceValues.hairStyle = id;
       if (id === 'none' || !glbRoot) {
+        if (glbRoot) initHairFlow();
+        else clearHairFlowState();
         return { ok: true, hair: 'none' };
       }
       const url = hairAssetUrl(id);
@@ -10901,12 +11135,14 @@
         hairMeshes = meshes;
         glbRoot.add(hairRoot);
         charSkel.update();
+        const morphMeshes = registerHairShapeKeyMeshes();
         for (const m of meshes) {
           m.computeBoundingSphere?.();
           m.computeBoundingBox?.();
         }
-        console.log('[hair] equipped', id, 'meshes', meshes.length);
-        statusEl.textContent = `Hair: ${id} (${meshes.length} mesh)`;
+        console.log('[hair] equipped', id, 'meshes', meshes.length, 'morph', morphMeshes);
+        statusEl.textContent = `Hair: ${id} (${meshes.length} mesh${morphMeshes ? `, ${morphMeshes} morph` : ''})`;
+        initHairFlow();
         return { ok: true, hair: id, meshes: meshes.length };
       } catch (err) {
         console.error('[hair] load failed', err);
@@ -10915,6 +11151,484 @@
         return { ok: false, reason: String(err?.message || err) };
       }
     }
+
+    // ===== Spring bones: hair, bangs & skirt (VRM-style Verlet secondary motion) =
+    // Ported from vitalquest prefab viewer (assets/chara/prefab/viewer/index.html).
+    // Each recognized bone is a spring joint. Every frame its "tail" (the child
+    // bone's head, or a virtual point along the bone for the leaf) tries to keep its
+    // world position by inertia, while stiffness pulls it back to the animated rest
+    // pose and gravity pulls it down. Skirt panels additionally collide with
+    // leg/hip capsules so cloth doesn't pass through the body.
+    //
+    // New Blender names (GLTF may strip dots: Bangs01.L.001 → Bangs01L001):
+    //   Bangs##.{L,R}.###        — front fringe; ### is chain depth (001 = root)
+    //   Backhair##.{L,R}.###     — back hair
+    //   Sidehair##.{L,R}.###     — side hair
+    //   DEF-skirtFR_d.{L,R}.###  — front skirt (chain from .000)
+    //   DEF-skirtBR_d.{L,R}.###  — back skirt
+    //   DEF-skirtSF_d.{L,R}.###  — side-front
+    //   DEF-skirtSB_d.{L,R}.###  — side-back
+    //   DEF-skirtSM_d.{L,R}.###  — side-middle
+    // Also accepts the older catalog names (hair_NN.L, bangs_NN.L, skirt_FR01).
+    // Roots (.000 / .001 / NN=01) are stiffer; tips swing more freely.
+    const HAIR_FLOW_BONE_RE = /^(hair|bangs)_(\d+)\.?[LRM]$/i;
+    const HAIR_CHAIN_BONE_RE = /^(Bangs|Backhair|Sidehair)_?(\d+)\.?([LR])\.?(\d+)$/i;
+    const HAIR_CHAIN_LOOSE_RE = /^(Bangs|Backhair|Sidehair).*?([LR]).*?(\d+)$/i;
+    const SKIRT_BONE_RE = /^skirt_(FMR|FML|BMR|BML|FL|SL|BL|FR|SR|BR)(\d+)$/i;
+    const SKIRT_DEF_BONE_RE = /^DEF[-_]?skirt[-_]?(FR|BR|SF|SB|SM)_d\.?([LR])\.?(\d+)$/i;
+
+    const HAIR_TIER_STIFFNESS = { 0: 2.4, 1: 2.2, 2: 2.0, 3: 1.2, 4: 0.75 };
+    const HAIR_TIER_DRAG = { 0: 0.58, 1: 0.55, 2: 0.52, 3: 0.44, 4: 0.38 };
+    const HAIR_TIER_FALLBACK = { stiffness: 0.7, drag: 0.36 };
+
+    const BANGS_TIER_STIFFNESS = { 0: 1.1, 1: 0.95, 2: 0.7, 3: 0.42 };
+    const BANGS_TIER_DRAG = { 0: 0.5, 1: 0.46, 2: 0.4, 3: 0.34 };
+    const BANGS_TIER_FALLBACK = { stiffness: 0.4, drag: 0.32 };
+
+    const SKIRT_TIER_STIFFNESS = { 0: 3.2, 1: 3.0, 2: 1.8, 3: 1.2, 4: 0.9 };
+    const SKIRT_TIER_DRAG = { 0: 0.68, 1: 0.65, 2: 0.58, 3: 0.52, 4: 0.48 };
+    const SKIRT_TIER_FALLBACK = { stiffness: 0.9, drag: 0.48 };
+
+    const FAMILY_GRAVITY = { hair: 1.0, bangs: 1.05, skirt: 2.2 };
+
+    // Max angle from rest (degrees). Verlet still has full inertia; the cone
+    // only caps how far a joint may travel. Root of a moving chain is tighter;
+    // the tip keeps a wide cone. Sidehair .002 is uncapped (full swing).
+    const HAIR_CONE_DEG = { root: 22, tip: 52 };
+    const BANGS_CONE_DEG = { root: 32, tip: 64 };
+    const SKIRT_CONE_DEG = { root: 12, tip: 36 };
+
+    let hairSpringJoints = [];
+    let hairFlowEnabled = true;
+    let hairFlowStrength = 1.0;
+    let hairFlowGravity = 0.35;
+    let hairFlowReady = false;
+    let skirtColliders = [];
+    let _hairHasSkirt = false;
+    let _cachedHairSkeleton = null;
+    let _boneNameCache = null;
+    let _skirtColliderBones = null;
+
+    const _hairGravityDir = new THREE.Vector3(0, -1, 0);
+    const _hsParentWQ = new THREE.Quaternion();
+    const _hsParentWPos = new THREE.Vector3();
+    const _hsParentWScale = new THREE.Vector3();
+    const _hsRestWQ = new THREE.Quaternion();
+    const _hsBoneWPos = new THREE.Vector3();
+    const _hsInertia = new THREE.Vector3();
+    const _hsStiff = new THREE.Vector3();
+    const _hsExternal = new THREE.Vector3();
+    const _hsNextTail = new THREE.Vector3();
+    const _hsFromDir = new THREE.Vector3();
+    const _hsToDir = new THREE.Vector3();
+    const _hsRestDir = new THREE.Vector3();
+    const _hsClampAxis = new THREE.Vector3();
+    const _hsClampedDir = new THREE.Vector3();
+    const _hsDeltaQ = new THREE.Quaternion();
+    const _hsTmpV = new THREE.Vector3();
+    const _scTmpDown = new THREE.Vector3(0, -0.1, 0);
+    const _scAB = new THREE.Vector3();
+    const _scAP = new THREE.Vector3();
+    const _scClosest = new THREE.Vector3();
+    const _scPush = new THREE.Vector3();
+
+    function parseHairBone(boneName) {
+      const n = String(boneName || '');
+      const chain = n.match(HAIR_CHAIN_BONE_RE);
+      if (chain) {
+        const kind = chain[1].toLowerCase();
+        const family = kind === 'bangs' ? 'bangs' : 'hair';
+        return { family, kind, tier: +chain[4], panel: `${kind}${chain[2]}${chain[3].toUpperCase()}` };
+      }
+      const loose = n.match(HAIR_CHAIN_LOOSE_RE);
+      if (loose) {
+        const kind = loose[1].toLowerCase();
+        const family = kind === 'bangs' ? 'bangs' : 'hair';
+        return { family, kind, tier: +loose[3], panel: `${kind}${loose[2].toUpperCase()}` };
+      }
+      const hm = n.match(HAIR_FLOW_BONE_RE);
+      if (hm) return { family: hm[1].toLowerCase(), kind: hm[1].toLowerCase(), tier: +hm[2] };
+      const smDef = n.match(SKIRT_DEF_BONE_RE);
+      if (smDef) return { family: 'skirt', tier: +smDef[3], panel: `${smDef[1]}${smDef[2].toUpperCase()}` };
+      const sm = n.match(SKIRT_BONE_RE);
+      if (sm) return { family: 'skirt', tier: +sm[2], panel: sm[1].toUpperCase() };
+      return null;
+    }
+
+    /** Hair/bangs .000/.001 stay glued to the scalp — never simulated. */
+    function isLockedHairRoot(parsed) {
+      if (!parsed) return false;
+      if (parsed.family !== 'hair' && parsed.family !== 'bangs') return false;
+      return parsed.tier <= 1;
+    }
+
+    function isUncappedSideHair(j) {
+      if (j.kind === 'sidehair' && j.tier === 2) return true;
+      const name = String(j.bone?.name || j.panel || '');
+      return /sidehair/i.test(name) && j.tier === 2;
+    }
+
+    function applyChainLimits(joints) {
+      const groups = new Map();
+      for (const j of joints) {
+        j.maxAngle = Infinity;
+        if (j.locked) continue;
+        const key = `${j.family}:${j.panel || j.bone.name}`;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(j);
+      }
+      for (const list of groups.values()) {
+        const minT = Math.min(...list.map((j) => j.tier));
+        const maxT = Math.max(...list.map((j) => j.tier));
+        const span = maxT - minT;
+        const family = list[0].family;
+        const cone = family === 'skirt'
+          ? SKIRT_CONE_DEG
+          : family === 'bangs'
+            ? BANGS_CONE_DEG
+            : HAIR_CONE_DEG;
+        for (const j of list) {
+          if (isUncappedSideHair(j)) {
+            j.maxAngle = Infinity;
+            continue;
+          }
+          const u = span > 0 ? (j.tier - minT) / span : 1;
+          const deg = cone.root + (cone.tip - cone.root) * u;
+          j.maxAngle = THREE.MathUtils.degToRad(deg);
+        }
+      }
+    }
+
+    function clampTailToCone(j, restWQ, boneWPos) {
+      const maxA = j.maxAngle;
+      if (!(maxA > 0) || maxA >= Math.PI - 1e-3) return;
+      _hsRestDir.copy(j.boneAxis).applyQuaternion(restWQ).normalize();
+      _hsToDir.subVectors(_hsNextTail, boneWPos);
+      const len = _hsToDir.length() || 1e-6;
+      _hsToDir.multiplyScalar(1 / len);
+      const ang = _hsRestDir.angleTo(_hsToDir);
+      if (ang <= maxA || ang < 1e-5) return;
+      _hsClampAxis.copy(_hsRestDir).cross(_hsToDir);
+      if (_hsClampAxis.lengthSq() < 1e-12) return;
+      _hsClampAxis.normalize();
+      _hsClampedDir.copy(_hsRestDir).applyAxisAngle(_hsClampAxis, maxA);
+      _hsNextTail.copy(boneWPos).addScaledVector(_hsClampedDir, j.boneLength);
+    }
+
+    function hairTuningFor(parsed) {
+      if (parsed.family === 'bangs') {
+        return {
+          stiffness: BANGS_TIER_STIFFNESS[parsed.tier] ?? BANGS_TIER_FALLBACK.stiffness,
+          drag: BANGS_TIER_DRAG[parsed.tier] ?? BANGS_TIER_FALLBACK.drag,
+        };
+      }
+      if (parsed.family === 'skirt') {
+        return {
+          stiffness: SKIRT_TIER_STIFFNESS[parsed.tier] ?? SKIRT_TIER_FALLBACK.stiffness,
+          drag: SKIRT_TIER_DRAG[parsed.tier] ?? SKIRT_TIER_FALLBACK.drag,
+        };
+      }
+      return {
+        stiffness: HAIR_TIER_STIFFNESS[parsed.tier] ?? HAIR_TIER_FALLBACK.stiffness,
+        drag: HAIR_TIER_DRAG[parsed.tier] ?? HAIR_TIER_FALLBACK.drag,
+      };
+    }
+
+    const SKIRT_COLLIDER_BONES = [
+      { head: 'DEF-thigh.L', tail: 'DEF-shin.L', radius: 0.072 },
+      { head: 'DEF-thigh.R', tail: 'DEF-shin.R', radius: 0.072 },
+      { head: 'DEF-thighL', tail: 'DEF-shinL', radius: 0.072 },
+      { head: 'DEF-thighR', tail: 'DEF-shinR', radius: 0.072 },
+      { head: 'DEF-shin.L', tail: 'DEF-shin.L.001', radius: 0.055 },
+      { head: 'DEF-shin.R', tail: 'DEF-shin.R.001', radius: 0.055 },
+      { head: 'DEF-shinL', tail: 'DEF-shinL001', radius: 0.055 },
+      { head: 'DEF-shinR', tail: 'DEF-shinR001', radius: 0.055 },
+      { head: 'hips', tail: 'DEF-spine.001', radius: 0.11 },
+      { head: 'DEF-hips', tail: 'DEF-spine.001', radius: 0.11 },
+      { head: 'DEF-spine', tail: 'DEF-spine.001', radius: 0.11 },
+    ];
+
+    function gltfSanitizedName(name) {
+      return String(name || '').replace(/\./g, '');
+    }
+
+    function rebuildBoneNameCache() {
+      _boneNameCache = new Map();
+      glbRoot?.traverse((o) => {
+        if (o.isBone && !_boneNameCache.has(o.name)) _boneNameCache.set(o.name, o);
+      });
+    }
+
+    function findBoneInRoot(name) {
+      if (!glbRoot || !name) return null;
+      if (!_boneNameCache) rebuildBoneNameCache();
+      return _boneNameCache.get(name) || _boneNameCache.get(gltfSanitizedName(name)) || null;
+    }
+
+    function resolveSkirtColliderBones() {
+      _skirtColliderBones = [];
+      const seen = new Set();
+      for (const def of SKIRT_COLLIDER_BONES) {
+        const head = findBoneInRoot(def.head);
+        if (!head || seen.has(head.uuid)) continue;
+        seen.add(head.uuid);
+        _skirtColliderBones.push({
+          head,
+          tail: findBoneInRoot(def.tail),
+          radius: def.radius,
+          a: new THREE.Vector3(),
+          b: new THREE.Vector3(),
+        });
+      }
+      skirtColliders = _skirtColliderBones.map((d) => ({ a: d.a, b: d.b, radius: d.radius }));
+    }
+
+    function rebuildSkirtColliders() {
+      if (!_skirtColliderBones) resolveSkirtColliderBones();
+      for (const def of _skirtColliderBones) {
+        def.head.getWorldPosition(def.a);
+        if (def.tail) def.tail.getWorldPosition(def.b);
+        else def.b.copy(def.a).add(_scTmpDown);
+      }
+    }
+
+    function collideSkirtPoint(p) {
+      for (const c of skirtColliders) {
+        _scAB.subVectors(c.b, c.a);
+        const abLenSq = _scAB.lengthSq() || 1e-6;
+        _scAP.subVectors(p, c.a);
+        let t = _scAP.dot(_scAB) / abLenSq;
+        t = THREE.MathUtils.clamp(t, 0, 1);
+        _scClosest.copy(c.a).addScaledVector(_scAB, t);
+        _scPush.subVectors(p, _scClosest);
+        const d = _scPush.length();
+        if (d < c.radius && d > 1e-6) {
+          p.addScaledVector(_scPush, (c.radius - d) / d);
+        } else if (d <= 1e-6) {
+          p.addScaledVector(_hairGravityDir, -c.radius);
+        }
+      }
+    }
+
+    function collectSpringBones() {
+      const bones = [];
+      const seen = new Set();
+      const add = (o) => {
+        if (!o?.name || seen.has(o.uuid || o.name)) return;
+        if (!parseHairBone(o.name)) return;
+        seen.add(o.uuid || o.name);
+        bones.push(o);
+      };
+      const skel = findSkeleton(glbRoot);
+      if (skel) {
+        for (const b of skel.bones) add(b);
+      }
+      glbRoot?.traverse((o) => {
+        if (o.isBone || o.isObject3D) add(o);
+      });
+      return bones;
+    }
+
+    function initHairFlow() {
+      hairSpringJoints = [];
+      hairFlowReady = false;
+      _cachedHairSkeleton = null;
+      _boneNameCache = null;
+      _skirtColliderBones = null;
+      if (!glbRoot) return 0;
+      glbRoot.updateMatrixWorld(true);
+
+      for (const bone of collectSpringBones()) {
+        const parsed = parseHairBone(bone.name);
+        if (!parsed) continue;
+
+        const childBone = bone.children?.find((c) => c.isBone);
+        const restLocalRotation = bone.quaternion.clone();
+        let boneAxis;
+        let boneLength;
+        if (childBone) {
+          boneAxis = childBone.position.clone();
+          boneLength = boneAxis.length();
+          if (boneLength < 1e-5) { boneAxis.set(0, 1, 0); boneLength = 0.05; }
+          else boneAxis.normalize();
+        } else {
+          boneAxis = new THREE.Vector3(0, 1, 0);
+          boneLength = Math.max(0.02, bone.position.length() || 0.04);
+        }
+
+        const tuning = hairTuningFor(parsed);
+        const tailLocal = boneAxis.clone().multiplyScalar(boneLength);
+        const tailWorld = tailLocal.clone().applyMatrix4(bone.matrixWorld);
+
+        hairSpringJoints.push({
+          bone,
+          family: parsed.family,
+          kind: parsed.kind || parsed.family,
+          panel: parsed.panel || null,
+          tier: parsed.tier,
+          stiffness: tuning.stiffness,
+          drag: tuning.drag,
+          gravityScale: FAMILY_GRAVITY[parsed.family] ?? 1.0,
+          collides: parsed.family === 'skirt',
+          locked: isLockedHairRoot(parsed),
+          maxAngle: Infinity,
+          restLocalRotation,
+          boneAxis,
+          boneLength,
+          currentTail: tailWorld.clone(),
+          prevTail: tailWorld.clone(),
+        });
+      }
+
+      hairSpringJoints.sort((a, b) => a.tier - b.tier);
+      applyChainLimits(hairSpringJoints);
+      _hairHasSkirt = hairSpringJoints.some((j) => j.family === 'skirt');
+      hairFlowReady = hairSpringJoints.length > 0;
+      const unmatchedHint = collectSpringBones()
+        .map((b) => b.name)
+        .filter((n) => /bang|hair|skirt/i.test(n) && !parseHairBone(n))
+        .slice(0, 24);
+      if (hairFlowReady) {
+        const counts = { hair: 0, bangs: 0, skirt: 0 };
+        for (const j of hairSpringJoints) counts[j.family] = (counts[j.family] || 0) + 1;
+        console.log('[spring]', counts, 'joints', hairSpringJoints.length, unmatchedHint.length ? { unmatched: unmatchedHint } : '');
+      } else {
+        console.warn('[spring] no joints. hair/skirt-like names:', unmatchedHint);
+      }
+      return hairSpringJoints.length;
+    }
+
+    function resetHairFlowLag() {
+      if (!glbRoot) return;
+      glbRoot.updateMatrixWorld(true);
+      for (const j of hairSpringJoints) {
+        j.restLocalRotation.copy(j.bone.quaternion);
+        _hsTmpV.copy(j.boneAxis).multiplyScalar(j.boneLength).applyMatrix4(j.bone.matrixWorld);
+        j.currentTail.copy(_hsTmpV);
+        j.prevTail.copy(_hsTmpV);
+      }
+    }
+
+    function clearHairFlowState() {
+      hairSpringJoints = [];
+      hairFlowReady = false;
+      _boneNameCache = null;
+      _skirtColliderBones = null;
+      _cachedHairSkeleton = null;
+      skirtColliders = [];
+    }
+
+    function updateHairFlow(dt) {
+      if (!hairFlowEnabled || !hairFlowReady || !glbRoot) return;
+      if (!_cachedHairSkeleton) _cachedHairSkeleton = findSkeleton(glbRoot);
+      const skel = _cachedHairSkeleton;
+      if (_hairHasSkirt) rebuildSkirtColliders();
+      let remaining = Math.min(dt, 0.1);
+      const STEP = 1 / 60;
+      while (remaining > 1e-5) {
+        const h = Math.min(STEP, remaining);
+        remaining -= h;
+        hairFlowStep(h);
+      }
+      if (skel) skel.update();
+    }
+
+    function hairFlowStep(dt) {
+      for (const j of hairSpringJoints) {
+        const bone = j.bone;
+        const parent = bone.parent;
+
+        if (j.locked) {
+          bone.quaternion.copy(j.restLocalRotation);
+          bone.updateMatrix();
+          if (parent) bone.matrixWorld.multiplyMatrices(parent.matrixWorld, bone.matrix);
+          else bone.matrixWorld.copy(bone.matrix);
+          _hsTmpV.copy(j.boneAxis).multiplyScalar(j.boneLength).applyMatrix4(bone.matrixWorld);
+          j.prevTail.copy(j.currentTail);
+          j.currentTail.copy(_hsTmpV);
+          continue;
+        }
+
+        if (parent) {
+          parent.matrixWorld.decompose(_hsParentWPos, _hsParentWQ, _hsParentWScale);
+        } else {
+          _hsParentWPos.set(0, 0, 0);
+          _hsParentWQ.identity();
+          _hsParentWScale.set(1, 1, 1);
+        }
+
+        _hsRestWQ.copy(_hsParentWQ).multiply(j.restLocalRotation);
+        bone.matrixWorld.decompose(_hsBoneWPos, _hsDeltaQ, _hsTmpV);
+
+        const stiffness = j.stiffness * hairFlowStrength;
+        const dragForce = THREE.MathUtils.clamp(j.drag, 0, 1);
+
+        _hsInertia.subVectors(j.currentTail, j.prevTail).multiplyScalar(1 - dragForce);
+        _hsStiff.copy(j.boneAxis)
+          .applyQuaternion(_hsRestWQ)
+          .multiplyScalar(stiffness * dt * dt * 60);
+        _hsExternal.copy(_hairGravityDir)
+          .multiplyScalar(hairFlowGravity * j.gravityScale * dt * dt * 60);
+
+        _hsNextTail.copy(j.currentTail).add(_hsInertia).add(_hsStiff).add(_hsExternal);
+        _hsNextTail.sub(_hsBoneWPos);
+        const len = _hsNextTail.length() || 1e-6;
+        _hsNextTail.multiplyScalar(j.boneLength / len).add(_hsBoneWPos);
+        clampTailToCone(j, _hsRestWQ, _hsBoneWPos);
+
+        if (j.collides && skirtColliders.length) {
+          collideSkirtPoint(_hsNextTail);
+          _hsNextTail.sub(_hsBoneWPos);
+          const l2 = _hsNextTail.length() || 1e-6;
+          _hsNextTail.multiplyScalar(j.boneLength / l2).add(_hsBoneWPos);
+        }
+
+        j.prevTail.copy(j.currentTail);
+        j.currentTail.copy(_hsNextTail);
+
+        _hsToDir.subVectors(_hsNextTail, _hsBoneWPos);
+        _hsParentWQ.invert();
+        _hsToDir.applyQuaternion(_hsParentWQ).normalize();
+        _hsFromDir.copy(j.boneAxis).applyQuaternion(j.restLocalRotation).normalize();
+
+        _hsDeltaQ.setFromUnitVectors(_hsFromDir, _hsToDir);
+        bone.quaternion.copy(j.restLocalRotation).premultiply(_hsDeltaQ);
+
+        bone.updateMatrix();
+        if (parent) bone.matrixWorld.multiplyMatrices(parent.matrixWorld, bone.matrix);
+        else bone.matrixWorld.copy(bone.matrix);
+      }
+    }
+
+    window.sandboxSetHairFlowEnabled = function (on) {
+      hairFlowEnabled = !!on;
+      if (hairFlowEnabled && glbRoot) resetHairFlowLag();
+      return hairFlowEnabled;
+    };
+    window.sandboxSetHairFlowStrength = (v) => {
+      hairFlowStrength = Math.max(0, +v || 0);
+      return hairFlowStrength;
+    };
+    window.sandboxSetHairFlowGravity = (v) => {
+      hairFlowGravity = Math.max(0, +v || 0);
+      return hairFlowGravity;
+    };
+    window.sandboxReinitHairFlow = initHairFlow;
+    window.sandboxGetHairFlowDebug = () => ({
+      enabled: hairFlowEnabled,
+      ready: hairFlowReady,
+      joints: hairSpringJoints.length,
+      families: hairSpringJoints.reduce((acc, j) => {
+        acc[j.family] = (acc[j.family] || 0) + 1;
+        return acc;
+      }, {}),
+      sample: hairSpringJoints.slice(0, 12).map((j) => ({
+        name: j.bone.name,
+        kind: j.kind,
+        tier: j.tier,
+        maxDeg: Number.isFinite(j.maxAngle) ? Math.round(THREE.MathUtils.radToDeg(j.maxAngle)) : null,
+      })),
+    });
 
     function initOutlinePost() {
       if (outlineCompMatBest && outlineCompMatSsaa) return;
@@ -12668,7 +13382,7 @@
 
     // -- Character preview textures (body / head / overlays / eyes) --
     // Bump when publishing so GitHub Pages / browser caches cannot keep an old GLB or PNG.
-    const ASSET_REV = '20260816n';
+    const ASSET_REV = '20260817k';
     const textureLoader = new THREE.TextureLoader();
     const TEX_URL = (file) => {
       const enc = String(file || '').split('/').map(encodeURIComponent).join('/');
@@ -12702,8 +13416,19 @@
     };
     const EYE_SHINE = 'eyes/EYES_shine.png';
 
-    let irisHue = 0.58; // 0..1 -> blue default
-    let hairHue = 0.55; // 0..1 — bright default so black outline reads on hair
+    let irisHue = 0.58;
+    let hairHue = 0.55;
+    let irisColorMode = 'preset';
+    let irisPreset = 'blue';
+    let irisAdjust = { brightness: 0, contrast: 0, saturation: 0 };
+    let hairColorMode = 'preset';
+    let hairPreset = 'black';
+    let hairAdjust = { brightness: 0, contrast: 0, saturation: 0 };
+    const IRIS_PRESETS = {
+      blue: { h: 0.58, s: 0.48, l: 0.36 },
+      brown: { h: 0.07, s: 0.52, l: 0.30 },
+      green: { h: 0.33, s: 0.44, l: 0.34 },
+    };
     let underwearHue = 0.5;
     /**
      * Procedural OKLCH skin (Custom White base).
@@ -12788,6 +13513,141 @@
       hairStyle: 'none',
     };
 
+    /** Local-only texture trials (blob URLs — never uploaded). */
+    const LOCAL_TEX_SLOTS = ['faceOverlay', 'bodyOverlay', 'eyebrow', 'makeup', 'iris', 'pupil'];
+    const localTexOverrides = {
+      faceOverlay: null,
+      bodyOverlay: null,
+      eyebrow: null,
+      makeup: null,
+      iris: null,
+      pupil: null,
+    };
+    const LOCAL_TEX_UI = {
+      manualTexLoad: [
+        { slot: 'faceOverlay', label: 'Face overlay', hint: 'Alpha tattoo / freckles on head UV' },
+        { slot: 'bodyOverlay', label: 'Body overlay', hint: 'Alpha overlay on body UV' },
+        { slot: 'eyebrow', label: 'Eyebrows', hint: 'White-key brow PNG on head UV' },
+        { slot: 'makeup', label: 'Makeup', hint: 'Alpha makeup on head UV' },
+        { slot: 'iris', label: 'Iris', hint: 'Grayscale iris mask (style UV)' },
+        { slot: 'pupil', label: 'Pupil', hint: 'Grayscale pupil mask (style UV)' },
+      ],
+    };
+
+    function loadImageElement(url) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error('image decode failed'));
+        img.src = url;
+      });
+    }
+
+    function textureFromImage(img, { srgb = true } = {}) {
+      const tex = new THREE.Texture(img);
+      tex.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+      tex.flipY = false;
+      tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+      tex.needsUpdate = true;
+      return tex;
+    }
+
+    function revokeLocalTex(slot) {
+      const ov = localTexOverrides[slot];
+      if (!ov) return;
+      if (ov.blobUrl) URL.revokeObjectURL(ov.blobUrl);
+      ov.texture?.dispose?.();
+      localTexOverrides[slot] = null;
+    }
+
+    function clearAllLocalTex() {
+      for (const slot of LOCAL_TEX_SLOTS) revokeLocalTex(slot);
+      Object.keys(browAlphaCache).forEach((k) => { delete browAlphaCache[k]; });
+    }
+
+    function localOverlayPixelData(img, w, h, mode) {
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(img, 0, 0, w, h);
+      return { data: ctx.getImageData(0, 0, w, h).data, mode };
+    }
+
+    function invalidateLocalTexCache(slot) {
+      if (slot === 'bodyOverlay') {
+        invalidateSkinBakeCache();
+        previewDirty.body = true;
+      } else if (slot === 'faceOverlay' || slot === 'makeup' || slot === 'eyebrow') {
+        invalidateSkinBakeCache();
+        previewDirty.head = true;
+        if (slot === 'eyebrow') {
+          Object.keys(browAlphaCache).forEach((k) => { delete browAlphaCache[k]; });
+        }
+      }
+    }
+
+    async function setLocalTexFromFile(slot, file) {
+      if (!file || !LOCAL_TEX_SLOTS.includes(slot)) return { ok: false, reason: 'bad slot' };
+      const type = String(file.type || '');
+      if (type && !type.startsWith('image/')) {
+        return { ok: false, reason: 'not an image' };
+      }
+      revokeLocalTex(slot);
+      const blobUrl = URL.createObjectURL(file);
+      try {
+        const img = await loadImageElement(blobUrl);
+        const tex = textureFromImage(img);
+        localTexOverrides[slot] = { blobUrl, name: file.name, image: img, texture: tex };
+      } catch (err) {
+        URL.revokeObjectURL(blobUrl);
+        return { ok: false, reason: String(err?.message || err) };
+      }
+
+      invalidateLocalTexCache(slot);
+
+      const parts = {
+        body: slot === 'bodyOverlay',
+        head: slot === 'faceOverlay' || slot === 'makeup' || slot === 'eyebrow',
+        eyes: slot === 'iris' || slot === 'pupil',
+      };
+      if (characterTexturesOn) {
+        await applyCharacterTextures({
+          hue: irisHue,
+          preview: texturePreviewMode || prefersPreviewTextures(),
+          parts,
+        });
+      }
+      if (typeof buildCtrlTiles === 'function') buildCtrlTiles();
+      statusEl.textContent = `Local ${slot}: ${file.name} (session only)`;
+      return { ok: true, slot, name: file.name };
+    }
+
+    async function clearLocalTex(slot) {
+      if (!LOCAL_TEX_SLOTS.includes(slot) || !localTexOverrides[slot]) {
+        return { ok: false, reason: 'empty' };
+      }
+      revokeLocalTex(slot);
+      invalidateLocalTexCache(slot);
+      if (characterTexturesOn) {
+        const parts = {
+          body: slot === 'bodyOverlay',
+          head: slot === 'faceOverlay' || slot === 'makeup' || slot === 'eyebrow',
+          eyes: slot === 'iris' || slot === 'pupil',
+        };
+        await applyCharacterTextures({
+          hue: irisHue,
+          preview: texturePreviewMode || prefersPreviewTextures(),
+          parts,
+        });
+      }
+      if (typeof buildCtrlTiles === 'function') buildCtrlTiles();
+      statusEl.textContent = `Cleared local ${slot}`;
+      return { ok: true, slot };
+    }
+
     function showLoadOverlay(mode = 'boot', text) {
       const el = document.getElementById('loadOverlay');
       if (!el) return;
@@ -12858,6 +13718,18 @@
       const col = new THREE.Color();
       col.setHSL(Math.max(0, Math.min(1, +h || 0)), 0.72, 0.42);
       return col;
+    }
+
+    function resolveIrisColor() {
+      let col;
+      if (irisColorMode === 'preset') {
+        const p = IRIS_PRESETS[irisPreset] || IRIS_PRESETS.blue;
+        col = new THREE.Color().setHSL(p.h, p.s, p.l);
+      } else {
+        col = new THREE.Color();
+        col.setHSL(irisHue, 0.58, 0.38);
+      }
+      return applyColorAdjust(col, irisAdjust);
     }
 
     function clamp01(x) {
@@ -13164,16 +14036,21 @@
     async function loadHeadOverlayStack(w, h) {
       const out = [];
       const makeup = texChoiceValues.makeup;
-      if (makeup && makeup !== 'NULL.png') {
+      if (localTexOverrides.makeup?.image) {
+        out.push(localOverlayPixelData(localTexOverrides.makeup.image, w, h, 'alpha'));
+      } else if (makeup && makeup !== 'NULL.png') {
         out.push(await loadOverlayPixelData(`face/overlays/makeup/${makeup}`, w, h, 'alpha'));
       }
       const faceExtra = texChoiceValues.faceExtra;
-      if (faceExtra && faceExtra !== 'none') {
+      if (localTexOverrides.faceOverlay?.image) {
+        out.push(localOverlayPixelData(localTexOverrides.faceOverlay.image, w, h, 'alpha'));
+      } else if (faceExtra && faceExtra !== 'none') {
         out.push(await loadOverlayPixelData(`face/overlays/extra/${faceExtra}`, w, h, 'alpha'));
       }
-      // Brows in the preview/full stack so they show without a native 4k sharp pass.
       const brow = texChoiceValues.eyebrow;
-      if (brow && brow !== 'none' && brow !== 'No Eyebrows.png') {
+      if (localTexOverrides.eyebrow?.image) {
+        out.push(localOverlayPixelData(localTexOverrides.eyebrow.image, w, h, 'whiteKey'));
+      } else if (brow && brow !== 'none' && brow !== 'No Eyebrows.png') {
         out.push(await loadOverlayPixelData(`face/overlays/eyebrows/${brow}`, w, h, 'whiteKey'));
       }
       return out;
@@ -13199,6 +14076,9 @@
     }
 
     async function loadEyebrowAlphaCanvas() {
+      if (localTexOverrides.eyebrow?.image) {
+        return whiteKeyToAlphaCanvas(localTexOverrides.eyebrow.image);
+      }
       const brow = texChoiceValues.eyebrow;
       if (!brow || brow === 'none') return null;
       const path = `face/overlays/eyebrows/${brow}`;
@@ -13244,7 +14124,9 @@
     async function loadBodyOverlayAlphaCanvases() {
       const out = [];
       const bodyExtra = texChoiceValues.bodyExtra;
-      if (bodyExtra && bodyExtra !== 'none') {
+      if (localTexOverrides.bodyOverlay?.image) {
+        out.push(imageToCanvas(localTexOverrides.bodyOverlay.image));
+      } else if (bodyExtra && bodyExtra !== 'none') {
         try {
           const tex = await loadTex(`body/overlays/extra/${bodyExtra}`);
           out.push(imageToCanvas(tex.image));
@@ -13297,7 +14179,9 @@
     async function loadBodyOverlayStack(w, h) {
       const out = [];
       const bodyExtra = texChoiceValues.bodyExtra;
-      if (bodyExtra && bodyExtra !== 'none') {
+      if (localTexOverrides.bodyOverlay?.image) {
+        out.push(localOverlayPixelData(localTexOverrides.bodyOverlay.image, w, h, 'alpha'));
+      } else if (bodyExtra && bodyExtra !== 'none') {
         out.push(await loadOverlayPixelData(`body/overlays/extra/${bodyExtra}`, w, h, 'alpha'));
       }
       const uw = texChoiceValues.underwear;
@@ -13367,17 +14251,34 @@
 
     function paintSkinTier(tier, p, { sharpOverlays = false } = {}) {
       if (!tier) return;
-      if (tier.bodyOklch) applyPresetOklchAdjust(tier.bodyOklch, tier.bodyOut.data, null, p);
-      else applyOklchFromLuma(tier.bodyLuma, tier.bodyOut.data, null, p);
-      compositeOverlayStack(tier.bodyOut, tier.bodyOverlays);
-      tier.bodyCtx.putImageData(tier.bodyOut, 0, 0);
-      // Native 4k sharp overlays are optional and double-draw if stacks already include them.
+      if (tier.skipBodyOklch) {
+        const raw = tier.bodyCtx.getImageData(0, 0, tier.bw, tier.bh);
+        compositeOverlayStack(raw, tier.bodyOverlays);
+        tier.bodyCtx.putImageData(raw, 0, 0);
+      } else if (tier.bodyOklch) {
+        applyPresetOklchAdjust(tier.bodyOklch, tier.bodyOut.data, null, p);
+        compositeOverlayStack(tier.bodyOut, tier.bodyOverlays);
+        tier.bodyCtx.putImageData(tier.bodyOut, 0, 0);
+      } else {
+        applyOklchFromLuma(tier.bodyLuma, tier.bodyOut.data, null, p);
+        compositeOverlayStack(tier.bodyOut, tier.bodyOverlays);
+        tier.bodyCtx.putImageData(tier.bodyOut, 0, 0);
+      }
       if (sharpOverlays) compositeNativeBodyOverlays(tier, skinBakeCache?.bodyAlphas);
 
-      if (tier.headOklch) applyPresetOklchAdjust(tier.headOklch, tier.headOut.data, tier.lipMaskLuma, p);
-      else applyOklchFromLuma(tier.headLuma, tier.headOut.data, tier.lipMaskLuma, p);
-      compositeOverlayStack(tier.headOut, tier.headOverlays);
-      tier.headCtx.putImageData(tier.headOut, 0, 0);
+      if (tier.skipHeadOklch) {
+        const raw = tier.headCtx.getImageData(0, 0, tier.hw, tier.hh);
+        compositeOverlayStack(raw, tier.headOverlays);
+        tier.headCtx.putImageData(raw, 0, 0);
+      } else if (tier.headOklch) {
+        applyPresetOklchAdjust(tier.headOklch, tier.headOut.data, tier.lipMaskLuma, p);
+        compositeOverlayStack(tier.headOut, tier.headOverlays);
+        tier.headCtx.putImageData(tier.headOut, 0, 0);
+      } else {
+        applyOklchFromLuma(tier.headLuma, tier.headOut.data, tier.lipMaskLuma, p);
+        compositeOverlayStack(tier.headOut, tier.headOverlays);
+        tier.headCtx.putImageData(tier.headOut, 0, 0);
+      }
       if (sharpOverlays) compositeNativeBrows(tier, skinBakeCache?.browAlpha);
 
       tier.bodyTex.needsUpdate = true;
@@ -13658,10 +14559,12 @@
     /** Composite iris (tinted) + black pupil masks -> CanvasTexture. */
     async function buildIrisPupilMap(hue, style) {
       const eye = EYE_STYLES[style] || EYE_STYLES.toon;
-      const [irisTex, pupilTex] = await Promise.all([
-        loadTex(eye.iris),
-        loadTex(eye.pupil),
-      ]);
+      const irisTex = localTexOverrides.iris?.texture
+        ? localTexOverrides.iris.texture
+        : await loadTex(eye.iris);
+      const pupilTex = localTexOverrides.pupil?.texture
+        ? localTexOverrides.pupil.texture
+        : await loadTex(eye.pupil);
       const w = irisTex.image?.width || 1024;
       const h = irisTex.image?.height || 1024;
       const irisCanvas = document.createElement('canvas');
@@ -13682,7 +14585,7 @@
       const ctx = canvas.getContext('2d');
       const out = ctx.createImageData(w, h);
       const d = out.data;
-      const irisCol = irisColorFromHue(hue);
+      const irisCol = resolveIrisColor();
       const ir = irisCol.r * 255;
       const ig = irisCol.g * 255;
       const ib = irisCol.b * 255;
@@ -13729,11 +14632,25 @@
       ctx.putImageData(out, 0, 0);
 
       const makeup = texChoiceValues.makeup;
-      if (makeup && makeup !== 'NULL.png') {
+      if (localTexOverrides.makeup?.image) {
+        const { canvas: oc, ctx: octx } = canvasFromImage(localTexOverrides.makeup.image, w, h);
+        const od = octx.getImageData(0, 0, w, h).data;
+        compositeAlpha(out.data, od);
+        ctx.putImageData(out, 0, 0);
+        oc.width = 0;
+        oc.height = 0;
+      } else if (makeup && makeup !== 'NULL.png') {
         await drawOverlay(ctx, out, `face/overlays/makeup/${makeup}`, 'alpha');
       }
       const faceExtra = texChoiceValues.faceExtra;
-      if (faceExtra && faceExtra !== 'none') {
+      if (localTexOverrides.faceOverlay?.image) {
+        const { canvas: oc, ctx: octx } = canvasFromImage(localTexOverrides.faceOverlay.image, w, h);
+        const od = octx.getImageData(0, 0, w, h).data;
+        compositeAlpha(out.data, od);
+        ctx.putImageData(out, 0, 0);
+        oc.width = 0;
+        oc.height = 0;
+      } else if (faceExtra && faceExtra !== 'none') {
         await drawOverlay(ctx, out, `face/overlays/extra/${faceExtra}`, 'alpha');
       }
       const browAlpha = await loadEyebrowAlphaCanvas();
@@ -14078,9 +14995,8 @@
       return underwearHue;
     }
 
-    async function setIrisHue(h) {
-      irisHue = Math.max(0, Math.min(1, +h));
-      if (!characterTexturesOn || !glbRoot) return irisHue;
+    async function refreshEyeColorMap() {
+      if (!characterTexturesOn || !glbRoot) return null;
       const eyeMap = await buildIrisPupilMap(irisHue, texChoiceValues.eyeStyle || 'toon');
       if (eyeMatRefs.length) {
         for (const mat of eyeMatRefs) {
@@ -14089,9 +15005,36 @@
           mat.needsUpdate = true;
         }
       } else {
-        await applyCharacterTextures({ hue: irisHue });
+        await applyCharacterTextures({ hue: irisHue, parts: { body: false, head: false, eyes: true } });
       }
+      return eyeMap;
+    }
+
+    async function setIrisHue(h) {
+      irisHue = Math.max(0, Math.min(1, +h));
+      await refreshEyeColorMap();
       return irisHue;
+    }
+
+    async function setIrisColorMode(mode) {
+      irisColorMode = mode === 'hue' ? 'hue' : 'preset';
+      await refreshEyeColorMap();
+      if (typeof buildCtrlTiles === 'function') buildCtrlTiles();
+      return irisColorMode;
+    }
+
+    async function setIrisPreset(id) {
+      if (IRIS_PRESETS[id]) irisPreset = id;
+      await refreshEyeColorMap();
+      if (typeof buildCtrlTiles === 'function') buildCtrlTiles();
+      return irisPreset;
+    }
+
+    async function setIrisAdjust(key, value) {
+      if (!Object.prototype.hasOwnProperty.call(irisAdjust, key)) return null;
+      irisAdjust[key] = clampRange(value, -0.5, 0.5);
+      await refreshEyeColorMap();
+      return irisAdjust[key];
     }
 
     function setSkinParam(id, value) {
@@ -15002,16 +15945,20 @@
       showLoadOverlay('boot', 'Loading...');
       statusEl.textContent = 'Loading GLB...';
       unequipHair();
+      clearHairFlowState();
       clearOutlineMeshes();
       if (!heightRecipe) await loadHeightRecipe();
       const gltf = await new GLTFLoader().loadAsync(url);
-      if (glbRoot) scene.remove(glbRoot);
+      if (glbRoot) {
+        detachGlbFromAvatar(glbRoot);
+        if (glbRoot.parent) glbRoot.parent.remove(glbRoot);
+      }
       disposeMixer();
       matBackup.clear();
       mapMode = null;
       clearCallouts();
       glbRoot = gltf.scene;
-      scene.add(glbRoot);
+      attachGlbToAvatar(glbRoot);
       heightSceneRestY = glbRoot.position.y;
       heightRoot = resolveHeightRoot(glbRoot);
       heightRootBaseline = heightRoot
@@ -15066,6 +16013,8 @@
           console.warn('[hair] auto-equip failed', err);
         }
       }
+      glbRoot.updateMatrixWorld(true);
+      initHairFlow();
       if (OUTLINE_TRIAL_ENABLED) await setOutlineTrial(true);
       const animInfo = animList().map((a) => a.name).join(',') || 'none';
       const texBit = texInfo?.ok
@@ -15258,7 +16207,12 @@
     };
     window.sandboxListBones = () => listBoneNames(glbRoot);
     window.sandboxListMeshes = () => listMeshParts();
-    window.sandboxSetFixedCamera = (fixed) => { controls.enabled = !fixed; refreshHud(); return true; };
+    window.sandboxSetFixedCamera = (fixed) => {
+      controls.enabled = !fixed;
+      controls.enableRotate = false;
+      refreshHud();
+      return true;
+    };
     window.sandboxCaptureBaseline = () => {
       baselineMetrics = lastMetrics ? { ...lastMetrics } : null;
       refreshHud();
@@ -15317,13 +16271,36 @@
       };
     };
     window.sandboxSetIrisHue = (h) => setIrisHue(h);
+    window.sandboxSetIrisColorMode = (m) => setIrisColorMode(m);
+    window.sandboxSetIrisPreset = (id) => setIrisPreset(id);
+    window.sandboxSetIrisAdjust = (key, v) => setIrisAdjust(key, v);
+    window.sandboxGetIrisColor = () => ({
+      mode: irisColorMode,
+      preset: irisPreset,
+      hue: irisHue,
+      adjust: { ...irisAdjust },
+    });
     window.sandboxSetHairHue = (h) => setHairHue(h);
+    window.sandboxSetHairColorMode = (m) => setHairColorMode(m);
+    window.sandboxSetHairPreset = (id) => setHairPreset(id);
+    window.sandboxSetHairAdjust = (key, v) => setHairAdjust(key, v);
+    window.sandboxGetHairColor = () => ({
+      mode: hairColorMode,
+      preset: hairPreset,
+      hue: hairHue,
+      adjust: { ...hairAdjust },
+    });
     window.sandboxGetHairHue = () => hairHue;
     window.sandboxSetUnderwearHue = (h) => setUnderwearHue(h);
     window.sandboxGetUnderwearHue = () => underwearHue;
     window.sandboxSetSkinParam = (id, value) => setSkinParam(id, value);
     window.sandboxSetTexChoice = (id, value) => setTexChoice(id, value);
     window.sandboxApplyTextures = () => applyCharacterTextures({ hue: irisHue });
+    window.sandboxLoadLocalTex = (slot, file) => setLocalTexFromFile(slot, file);
+    window.sandboxClearLocalTex = (slot) => clearLocalTex(slot);
+    window.sandboxGetLocalTex = () => Object.fromEntries(
+      LOCAL_TEX_SLOTS.map((s) => [s, localTexOverrides[s]?.name || null]),
+    );
     window.sandboxGetIrisHue = () => irisHue;
     window.sandboxGetSkinParams = () => ({ ...skinParams });
     window.sandboxGetTexChoices = () => ({ ...texChoiceValues });
@@ -15614,6 +16591,7 @@
       }
       applyFormCtrls();
       updateBlink(dt);
+      updateHairFlow(dt);
       // mul/compose when not playing: only via applyHeight() / animSeek (need fresh mixer sample)
       if (controls.enabled) controls.update();
       renderWithOutline();
@@ -15712,6 +16690,74 @@
       return min < 0 && max > 0 ? 0 : (min + max) / 2;
     }
 
+    function appendLocalTexLoadRow(slot, label, hint) {
+      const row = document.createElement('div');
+      row.className = 'local-tex-row';
+      const ov = localTexOverrides[slot];
+      const title = document.createElement('div');
+      title.className = 'local-tex-label';
+      title.textContent = label;
+      const hintEl = document.createElement('div');
+      hintEl.className = 'local-tex-hint';
+      hintEl.textContent = hint || 'Local only — not saved or uploaded.';
+      const nameEl = document.createElement('div');
+      nameEl.className = `local-tex-name${ov ? '' : ' empty'}`;
+      nameEl.textContent = ov?.name || 'Using bundled texture';
+      const actions = document.createElement('div');
+      actions.className = 'local-tex-actions';
+      const loadBtn = document.createElement('button');
+      loadBtn.type = 'button';
+      loadBtn.textContent = 'Load from file';
+      const clearBtn = document.createElement('button');
+      clearBtn.type = 'button';
+      clearBtn.className = 'local-tex-clear';
+      clearBtn.title = 'Clear local file';
+      clearBtn.setAttribute('aria-label', `Clear local ${label}`);
+      clearBtn.textContent = '×';
+      clearBtn.disabled = !ov;
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/png,image/jpeg,image/webp,image/*';
+      input.hidden = true;
+      loadBtn.addEventListener('click', () => input.click());
+      input.addEventListener('change', async () => {
+        const file = input.files?.[0];
+        input.value = '';
+        if (!file) return;
+        showLoadOverlay('tint', `Loading ${label}…`);
+        try {
+          await setLocalTexFromFile(slot, file);
+        } catch (err) {
+          console.warn('[local-tex]', err);
+          statusEl.textContent = `Local texture failed: ${err?.message || err}`;
+        } finally {
+          hideLoadOverlay();
+        }
+      });
+      clearBtn.addEventListener('click', async () => {
+        showLoadOverlay('tint', `Clearing ${label}…`);
+        try {
+          await clearLocalTex(slot);
+        } finally {
+          hideLoadOverlay();
+        }
+      });
+      actions.appendChild(loadBtn);
+      actions.appendChild(clearBtn);
+      row.appendChild(title);
+      row.appendChild(hintEl);
+      row.appendChild(nameEl);
+      row.appendChild(actions);
+      row.appendChild(input);
+      ctrlTileGrid.appendChild(row);
+    }
+
+    function appendLocalTexLoadRows(catId) {
+      const rows = LOCAL_TEX_UI[catId];
+      if (!rows?.length) return;
+      for (const row of rows) appendLocalTexLoadRow(row.slot, row.label, row.hint);
+    }
+
     function appendControlTile(c, span = 1) {
       const btn = document.createElement('button');
       btn.type = 'button';
@@ -15804,11 +16850,114 @@
       ctrlTileGrid.appendChild(card);
     }
 
+    function appendOptionTileGrid(options, activeValue, onSelect) {
+      for (const o of options) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'ctrl-tile';
+        btn.textContent = o.label || o.value;
+        if (activeValue === o.value) btn.classList.add('active');
+        btn.addEventListener('click', async () => {
+          await onSelect(o.value);
+          buildCtrlTiles();
+          updateEditorVisibility();
+        });
+        ctrlTileGrid.appendChild(btn);
+      }
+    }
+
+    function appendAdjustSliderCards(prefix, adjust, labels) {
+      for (const key of ['brightness', 'contrast', 'saturation']) {
+        appendSliderCard({
+          type: prefix,
+          id: key,
+          label: labels[key] || key,
+          value: adjust[key] ?? 0,
+          min: -0.5,
+          max: 0.5,
+        });
+      }
+    }
+
+    function appendEyeColorControls() {
+      appendOptionTileGrid(
+        [{ value: 'preset', label: 'Preset' }, { value: 'hue', label: 'Manual / Hue' }],
+        irisColorMode,
+        (v) => setIrisColorMode(v),
+      );
+      if (irisColorMode === 'preset') {
+        appendOptionTileGrid(
+          [
+            { value: 'blue', label: 'Blue' },
+            { value: 'brown', label: 'Brown' },
+            { value: 'green', label: 'Green' },
+          ],
+          irisPreset,
+          (v) => setIrisPreset(v),
+        );
+      } else {
+        appendSliderCard({
+          type: 'iris',
+          id: 'irisHue',
+          label: 'Eye hue',
+          value: irisHue,
+          min: 0,
+          max: 1,
+        });
+      }
+      appendAdjustSliderCards('irisAdjust', irisAdjust, {
+        brightness: 'Brightness',
+        contrast: 'Contrast',
+        saturation: 'Saturation',
+      });
+    }
+
+    function appendHairColorControls() {
+      appendOptionTileGrid(
+        [{ value: 'preset', label: 'Preset' }, { value: 'hue', label: 'Manual / Hue' }],
+        hairColorMode,
+        (v) => setHairColorMode(v),
+      );
+      if (hairColorMode === 'preset') {
+        appendOptionTileGrid(
+          [
+            { value: 'black', label: 'Black' },
+            { value: 'brown', label: 'Brown' },
+            { value: 'blonde', label: 'Blonde' },
+            { value: 'red', label: 'Red' },
+            { value: 'teal', label: 'Teal' },
+            { value: 'pink', label: 'Pink' },
+          ],
+          hairPreset,
+          (v) => setHairPreset(v),
+        );
+      } else {
+        appendSliderCard({
+          type: 'hairHue',
+          id: 'hairHue',
+          label: 'Hair hue',
+          value: hairHue,
+          min: 0,
+          max: 1,
+        });
+      }
+      appendAdjustSliderCards('hairAdjust', hairAdjust, {
+        brightness: 'Brightness',
+        contrast: 'Contrast',
+        saturation: 'Saturation',
+      });
+    }
+
     function buildCtrlTiles() {
       if (!ctrlTileGrid) return;
       parkRandomizerButtons();
       ctrlTileGrid.innerHTML = '';
       if (uiCategoryId === 'presets') return;
+
+      if (uiCategoryId === 'manualTexLoad') {
+        appendLocalTexLoadRows('manualTexLoad');
+        return;
+      }
 
       if (uiCategoryId === 'randomizer') {
         const gender = uiControls.find((c) => c.type === 'genderPair') || uiControls[0];
@@ -15844,14 +16993,7 @@
           ctrlTileGrid.appendChild(btn);
         }
         if (uiCategoryId === 'eyeStyle') {
-          appendSliderCard({
-            type: 'iris',
-            id: 'irisHue',
-            label: 'Eye color',
-            value: irisHue,
-            min: 0,
-            max: 1,
-          });
+          appendEyeColorControls();
         }
         if (uiCategoryId === 'bodyColor') {
           for (const c of uiControls) {
@@ -15869,14 +17011,7 @@
           });
         }
         if (uiCategoryId === 'hair' && texChoiceValues.hairStyle && texChoiceValues.hairStyle !== 'none') {
-          appendSliderCard({
-            type: 'hairHue',
-            id: 'hairHue',
-            label: 'Hair color',
-            value: hairHue,
-            min: 0,
-            max: 1,
-          });
+          appendHairColorControls();
         }
         return;
       }
@@ -15956,6 +17091,12 @@
       } else if (c.type === 'hairHue') {
         window.sandboxSetHairHue?.(t);
         c.value = t;
+      } else if (c.type === 'irisAdjust') {
+        window.sandboxSetIrisAdjust?.(c.id, t);
+        c.value = t;
+      } else if (c.type === 'hairAdjust') {
+        window.sandboxSetHairAdjust?.(c.id, t);
+        c.value = t;
       } else if (c.type === 'skinParam') {
         window.sandboxSetSkinParam?.(c.id, t);
       } else if (c.type === 'choice') {
@@ -15968,7 +17109,8 @@
       } else if (c.type === 'axis') {
         window.sandboxSetShapeAxis(c.id, t);
       }
-      if (c.type !== 'choice' && c.type !== 'iris' && c.type !== 'outfitHue' && c.type !== 'hairHue') c.value = t;
+      if (c.type !== 'choice' && c.type !== 'iris' && c.type !== 'outfitHue' && c.type !== 'hairHue'
+        && c.type !== 'irisAdjust' && c.type !== 'hairAdjust') c.value = t;
       updateSliderBubble();
     }
 
@@ -15985,6 +17127,7 @@
             || uiCategoryId === 'outfit'
             || uiCategoryId === 'hair'
             || uiCategoryId === 'bodyColor'
+            || uiCategoryId === 'manualTexLoad'
             || uiCategoryId === 'randomizer',
         );
       }

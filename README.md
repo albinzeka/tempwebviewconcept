@@ -6,7 +6,12 @@ Browser morph / proportion concept viewer (no Flutter required).
 
 **https://albinzeka.github.io/tempwebviewconcept/**
 
-Includes Bob hair + silhouette outline (`best` / `ssaa2`) as of 2026-08-16.
+Includes as of 2026-08-17:
+
+- Bob hair, silhouette outline (`best` / `ssaa2`)
+- Manual texture load (session-only overlays)
+- Eye / hair color (preset + hue)
+- Hair + skirt spring physics (character spin, locked scalp roots, sway cones)
 
 If that 404s, enable Pages once: **Settings -> Pages -> Branch `main` -> folder `/ (root)` -> Save**.
 
@@ -14,7 +19,7 @@ If that 404s, enable Pages once: **Settings -> Pages -> Branch `main` -> folder 
 
 | Path | Role |
 |---|---|
-| `index.html` | Viewer + morph UI + outline |
+| `index.html` | Viewer + morph UI + physics |
 | `models/height_overlay_clean.glb` | Character |
 | `models/bob.stripped.glb` | Bob hair |
 | `textures/` | Skin / face / eye maps |
