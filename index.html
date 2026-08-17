@@ -682,7 +682,7 @@
         <li><strong>OKLCH skin recipe</strong> - SkinDepth anchors + Warmth/Redness; White albedo drives luminance detail (not RGB multiply); Materials dashboard shows all skin sliders at once</li>
         <li><strong>Lip tint</strong> - <code>face/main/diffuse/Lip_Mask.png</code> (same head UV) + Lip pink/strength</li>
         <li><strong>Material picks</strong> - dropdown + ◀▶ cycle (not a slider) for skin base, eyes, brows, makeup, overlays, outfits</li>
-        <li><strong>Materials pack</strong> - skin tones (incl. White + hue), body/face overlays, underwear D/N/R, eye styles, brows (white-key) &amp; makeup (alpha)</li>
+        <li><strong>Materials pack</strong> - skin tones (incl. White + hue), body/face overlays, underwear D/N/R, eye styles, brows (alpha PNG) &amp; makeup (alpha)</li>
         <li><strong>Mouth / nose randomize</strong> - harder full-range rolls (except upper/lower lip width Bn + nose scale Sk)</li>
         <li><strong>Mouth / nose ranges</strong> - nose volume ±0.4; nose bridge ±0.3; lip widths 0…0.3; lips forward 0…1.3; removed Nose tilt + Lip Bulge</li>
         <li><strong>Orbit pivot</strong> - camera orbits torso/head bones (not full DEF bbox), so the centre is no longer in front of the mesh</li>
@@ -708,7 +708,7 @@
         <li><strong>Neck hierarchy</strong> - CTRL-ORG-spine.004 sibling of chest under CTRL-stature (shoulders no longer widen head)</li>
         <li><strong>Shoulder width</strong> - head cancels chest X/Z props so shoulders no longer widen the skull</li>
         <li><strong>Textures</strong> - body, head, eyebrows, iris &amp; pupil maps applied at runtime</li>
-        <li><strong>Eyebrows</strong> - white background keyed out so brows composite cleanly on the face</li>
+        <li><strong>Eyebrows</strong> - transparent PNG overlay; white-background catalog files are still keyed out</li>
         <li><strong>Iris hue</strong> - Materials category slider to tint eye color</li>
         <li><strong>Lid bones</strong> - eye master scale, lid root scale/rotate, lid B/T local Z controls</li>
         <li><strong>Natural height</strong> - stature + leg tweak recipe (no amp UI); head stays stable while height changes</li>
@@ -13382,7 +13382,7 @@
 
     // -- Character preview textures (body / head / overlays / eyes) --
     // Bump when publishing so GitHub Pages / browser caches cannot keep an old GLB or PNG.
-    const ASSET_REV = '20260817k';
+    const ASSET_REV = '20260817l';
     const textureLoader = new THREE.TextureLoader();
     const TEX_URL = (file) => {
       const enc = String(file || '').split('/').map(encodeURIComponent).join('/');
@@ -13527,7 +13527,7 @@
       manualTexLoad: [
         { slot: 'faceOverlay', label: 'Face overlay', hint: 'Alpha tattoo / freckles on head UV' },
         { slot: 'bodyOverlay', label: 'Body overlay', hint: 'Alpha overlay on body UV' },
-        { slot: 'eyebrow', label: 'Eyebrows', hint: 'White-key brow PNG on head UV' },
+        { slot: 'eyebrow', label: 'Eyebrows', hint: 'Transparent PNG on head UV (white bg still keyed)' },
         { slot: 'makeup', label: 'Makeup', hint: 'Alpha makeup on head UV' },
         { slot: 'iris', label: 'Iris', hint: 'Grayscale iris mask (style UV)' },
         { slot: 'pupil', label: 'Pupil', hint: 'Grayscale pupil mask (style UV)' },
@@ -14048,16 +14048,15 @@
         out.push(await loadOverlayPixelData(`face/overlays/extra/${faceExtra}`, w, h, 'alpha'));
       }
       const brow = texChoiceValues.eyebrow;
-      if (localTexOverrides.eyebrow?.image) {
-        out.push(localOverlayPixelData(localTexOverrides.eyebrow.image, w, h, 'whiteKey'));
-      } else if (brow && brow !== 'none' && brow !== 'No Eyebrows.png') {
-        out.push(await loadOverlayPixelData(`face/overlays/eyebrows/${brow}`, w, h, 'whiteKey'));
+      if (localTexOverrides.eyebrow?.image || (brow && brow !== 'none' && brow !== 'No Eyebrows.png')) {
+        const browAlpha = await loadEyebrowAlphaCanvas();
+        if (browAlpha) out.push(localOverlayPixelData(browAlpha, w, h, 'alpha'));
       }
       return out;
     }
 
     const browAlphaCache = {};
-    function whiteKeyToAlphaCanvas(img) {
+    function browImageToAlphaCanvas(img) {
       const w = img.width || 1;
       const h = img.height || 1;
       const canvas = document.createElement('canvas');
@@ -14067,6 +14066,11 @@
       ctx.drawImage(img, 0, 0);
       const id = ctx.getImageData(0, 0, w, h);
       const d = id.data;
+      let hasAlpha = false;
+      for (let i = 3; i < d.length; i += 4) {
+        if (d[i] < 250) { hasAlpha = true; break; }
+      }
+      if (hasAlpha) return canvas;
       for (let i = 0; i < d.length; i += 4) {
         const luma = (d[i] + d[i + 1] + d[i + 2]) / 3;
         d[i + 3] = luma >= 245 ? 0 : Math.min(255, Math.round((245 - luma) * (255 / 245)));
@@ -14077,14 +14081,14 @@
 
     async function loadEyebrowAlphaCanvas() {
       if (localTexOverrides.eyebrow?.image) {
-        return whiteKeyToAlphaCanvas(localTexOverrides.eyebrow.image);
+        return browImageToAlphaCanvas(localTexOverrides.eyebrow.image);
       }
       const brow = texChoiceValues.eyebrow;
       if (!brow || brow === 'none') return null;
       const path = `face/overlays/eyebrows/${brow}`;
       if (browAlphaCache[path]) return browAlphaCache[path];
       const tex = await loadTex(path);
-      const canvas = whiteKeyToAlphaCanvas(tex.image);
+      const canvas = browImageToAlphaCanvas(tex.image);
       browAlphaCache[path] = canvas;
       return canvas;
     }
