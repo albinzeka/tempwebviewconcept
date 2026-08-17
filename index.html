@@ -11161,16 +11161,17 @@
     // leg/hip capsules so cloth doesn't pass through the body.
     //
     // New Blender names (GLTF may strip dots: Bangs01.L.001 → Bangs01L001):
-    //   Bangs##.{L,R}.###        — front fringe; ### is chain depth (001 = root)
-    //   Backhair##.{L,R}.###     — back hair
-    //   Sidehair##.{L,R}.###     — side hair
+    //   Bangs##.{L,R}.###        — fringe; .001 scalp root (locked), .002 crown (tiny), tip .004
+    //   Backhair##.{L,R}.###     — back hair; tip .007 now, later up to .009
+    //   Sidehair##.{L,R}.###     — side hair; tip .006
     //   DEF-skirtFR_d.{L,R}.###  — front skirt (chain from .000)
     //   DEF-skirtBR_d.{L,R}.###  — back skirt
     //   DEF-skirtSF_d.{L,R}.###  — side-front
     //   DEF-skirtSB_d.{L,R}.###  — side-back
     //   DEF-skirtSM_d.{L,R}.###  — side-middle
     // Also accepts the older catalog names (hair_NN.L, bangs_NN.L, skirt_FR01).
-    // Roots (.000 / .001 / NN=01) are stiffer; tips swing more freely.
+    // Influence ramps from the first simulated bone (.002) to the actual tip of
+    // that chain, so extra backhair bones (.008/.009) pick up automatically.
     const HAIR_FLOW_BONE_RE = /^(hair|bangs)_(\d+)\.?[LRM]$/i;
     const HAIR_CHAIN_BONE_RE = /^(Bangs|Backhair|Sidehair)_?(\d+)\.?([LR])\.?(\d+)$/i;
     const HAIR_CHAIN_LOOSE_RE = /^(Bangs|Backhair|Sidehair).*?([LR]).*?(\d+)$/i;
@@ -11191,12 +11192,39 @@
 
     const FAMILY_GRAVITY = { hair: 1.0, bangs: 1.05, skirt: 2.2 };
 
-    // Max angle from rest (degrees). Verlet still has full inertia; the cone
-    // only caps how far a joint may travel. Root of a moving chain is tighter;
-    // the tip keeps a wide cone. Sidehair .002 is uncapped (full swing).
-    const HAIR_CONE_DEG = { root: 22, tip: 52 };
-    const BANGS_CONE_DEG = { root: 32, tip: 64 };
-    const SKIRT_CONE_DEG = { root: 12, tip: 36 };
+    // Per-chain spring: values lerp by eased influence (0 = crown .002, 1 = tip).
+    // Bangs use a steeper ease so .002/.003 barely move and .004 carries the sway.
+    const HAIR_SPRING = {
+      bangs: {
+        coneMin: 1.9, coneMax: 37,
+        stiffMin: 4.2, stiffMax: 0.43,
+        dragMin: 0.84, dragMax: 0.36,
+        gravMin: 0.04, gravMax: 0.84,
+        powerBias: 1.35,
+      },
+      sidehair: {
+        coneMin: 3.8, coneMax: 48,
+        stiffMin: 2.56, stiffMax: 0.62,
+        dragMin: 0.59, dragMax: 0.45,
+        gravMin: 0.1, gravMax: 1.2,
+        powerBias: 1.05,
+      },
+      backhair: {
+        coneMin: 3.8, coneMax: 46,
+        stiffMin: 2.56, stiffMax: 0.42,
+        dragMin: 0.59, dragMax: 0.29,
+        gravMin: 0.1, gravMax: 1.2,
+        powerBias: 1.0,
+      },
+      hair: {
+        coneMin: 3.8, coneMax: 46,
+        stiffMin: 2.56, stiffMax: 0.42,
+        dragMin: 0.59, dragMax: 0.29,
+        gravMin: 0.1, gravMax: 1.2,
+        powerBias: 1.0,
+      },
+    };
+    const SKIRT_CONE_DEG = { root: 10, tip: 29 };
 
     let hairSpringJoints = [];
     let hairFlowEnabled = true;
@@ -11225,6 +11253,7 @@
     const _hsClampAxis = new THREE.Vector3();
     const _hsClampedDir = new THREE.Vector3();
     const _hsDeltaQ = new THREE.Quaternion();
+    const _hsTransportQ = new THREE.Quaternion();
     const _hsTmpV = new THREE.Vector3();
     const _scTmpDown = new THREE.Vector3(0, -0.1, 0);
     const _scAB = new THREE.Vector3();
@@ -11255,23 +11284,24 @@
       return null;
     }
 
-    /** Hair/bangs .000/.001 stay glued to the scalp — never simulated. */
+    /** Hair/bangs .001 (and any .000) stay glued to the scalp — never simulated. */
     function isLockedHairRoot(parsed) {
       if (!parsed) return false;
       if (parsed.family !== 'hair' && parsed.family !== 'bangs') return false;
       return parsed.tier <= 1;
     }
 
-    function isUncappedSideHair(j) {
-      if (j.kind === 'sidehair' && j.tier === 2) return true;
-      const name = String(j.bone?.name || j.panel || '');
-      return /sidehair/i.test(name) && j.tier === 2;
+    function chainEasePower(kind, nSim) {
+      const n = Math.max(2, nSim);
+      const bias = (HAIR_SPRING[kind] || HAIR_SPRING.hair).powerBias;
+      return bias * (1 + 4 / n);
     }
 
     function applyChainLimits(joints) {
       const groups = new Map();
       for (const j of joints) {
         j.maxAngle = Infinity;
+        j.influence = j.locked ? 0 : 1;
         if (j.locked) continue;
         const key = `${j.family}:${j.panel || j.bone.name}`;
         if (!groups.has(key)) groups.set(key, []);
@@ -11282,37 +11312,58 @@
         const maxT = Math.max(...list.map((j) => j.tier));
         const span = maxT - minT;
         const family = list[0].family;
-        const cone = family === 'skirt'
-          ? SKIRT_CONE_DEG
-          : family === 'bangs'
-            ? BANGS_CONE_DEG
-            : HAIR_CONE_DEG;
-        for (const j of list) {
-          if (isUncappedSideHair(j)) {
-            j.maxAngle = Infinity;
-            continue;
+        if (family === 'skirt') {
+          for (const j of list) {
+            const u = span > 0 ? (j.tier - minT) / span : 1;
+            j.influence = u;
+            j.maxAngle = THREE.MathUtils.degToRad(
+              SKIRT_CONE_DEG.root + (SKIRT_CONE_DEG.tip - SKIRT_CONE_DEG.root) * u,
+            );
           }
+          continue;
+        }
+        const kind = list[0].kind || 'hair';
+        const cfg = HAIR_SPRING[kind] || HAIR_SPRING.hair;
+        const power = chainEasePower(kind, list.length);
+        for (const j of list) {
           const u = span > 0 ? (j.tier - minT) / span : 1;
-          const deg = cone.root + (cone.tip - cone.root) * u;
-          j.maxAngle = THREE.MathUtils.degToRad(deg);
+          const inf = Math.pow(u, power);
+          j.influence = inf;
+          j.maxAngle = THREE.MathUtils.degToRad(cfg.coneMin + (cfg.coneMax - cfg.coneMin) * inf);
+          j.stiffness = cfg.stiffMin + (cfg.stiffMax - cfg.stiffMin) * inf;
+          j.drag = cfg.dragMin + (cfg.dragMax - cfg.dragMin) * inf;
+          j.gravityScale = cfg.gravMin + (cfg.gravMax - cfg.gravMin) * inf;
+        }
+      }
+      const back003 = joints.find((j) => !j.locked && j.kind === 'backhair' && j.tier === 3);
+      if (back003) {
+        for (const j of joints) {
+          if (j.locked || j.kind !== 'sidehair') continue;
+          if (j.tier !== 4 && j.tier !== 5 && j.tier !== 6) continue;
+          j.influence = back003.influence;
+          j.maxAngle = back003.maxAngle;
+          j.stiffness = back003.stiffness;
+          j.drag = back003.drag;
+          j.gravityScale = back003.gravityScale;
         }
       }
     }
 
     function clampTailToCone(j, restWQ, boneWPos) {
       const maxA = j.maxAngle;
-      if (!(maxA > 0) || maxA >= Math.PI - 1e-3) return;
+      if (!(maxA > 0) || maxA >= Math.PI - 1e-3) return false;
       _hsRestDir.copy(j.boneAxis).applyQuaternion(restWQ).normalize();
       _hsToDir.subVectors(_hsNextTail, boneWPos);
       const len = _hsToDir.length() || 1e-6;
       _hsToDir.multiplyScalar(1 / len);
       const ang = _hsRestDir.angleTo(_hsToDir);
-      if (ang <= maxA || ang < 1e-5) return;
+      if (ang <= maxA || ang < 1e-5) return false;
       _hsClampAxis.copy(_hsRestDir).cross(_hsToDir);
-      if (_hsClampAxis.lengthSq() < 1e-12) return;
+      if (_hsClampAxis.lengthSq() < 1e-12) return false;
       _hsClampAxis.normalize();
       _hsClampedDir.copy(_hsRestDir).applyAxisAngle(_hsClampAxis, maxA);
       _hsNextTail.copy(boneWPos).addScaledVector(_hsClampedDir, j.boneLength);
+      return true;
     }
 
     function hairTuningFor(parsed) {
@@ -11414,9 +11465,12 @@
       const bones = [];
       const seen = new Set();
       const add = (o) => {
-        if (!o?.name || seen.has(o.uuid || o.name)) return;
-        if (!parseHairBone(o.name)) return;
-        seen.add(o.uuid || o.name);
+        if (!o?.name || !parseHairBone(o.name)) return;
+        if (seen.has(o.uuid)) return;
+        const nameKey = gltfSanitizedName(o.name);
+        if (seen.has(nameKey)) return;
+        seen.add(o.uuid);
+        seen.add(nameKey);
         bones.push(o);
       };
       const skel = findSkeleton(glbRoot);
@@ -11506,6 +11560,7 @@
         _hsTmpV.copy(j.boneAxis).multiplyScalar(j.boneLength).applyMatrix4(j.bone.matrixWorld);
         j.currentTail.copy(_hsTmpV);
         j.prevTail.copy(_hsTmpV);
+        j.prevBoneWPos = null;
       }
     }
 
@@ -11560,6 +11615,26 @@
         _hsRestWQ.copy(_hsParentWQ).multiply(j.restLocalRotation);
         bone.matrixWorld.decompose(_hsBoneWPos, _hsDeltaQ, _hsTmpV);
 
+        // Stiff / small-cone joints must ride the head's rigid motion. World-space
+        // Verlet treats a yaw as a shove, which slams 7° cones (sidehair 004–006)
+        // every frame and chatters. Floppy tips (influence ≈ 1) keep world lag.
+        if (j.prevBoneWPos) {
+          const t = THREE.MathUtils.clamp(1 - (j.influence ?? 1), 0, 1)
+            * (j.kind === 'bangs' ? 1 : 0.8);
+          if (t > 1e-4) {
+            _hsTransportQ.copy(j.prevRestWQ).invert().premultiply(_hsRestWQ);
+            _hsTmpV.copy(j.currentTail).sub(j.prevBoneWPos).applyQuaternion(_hsTransportQ).add(_hsBoneWPos);
+            j.currentTail.lerp(_hsTmpV, t);
+            _hsTmpV.copy(j.prevTail).sub(j.prevBoneWPos).applyQuaternion(_hsTransportQ).add(_hsBoneWPos);
+            j.prevTail.lerp(_hsTmpV, t);
+          }
+        } else {
+          j.prevBoneWPos = new THREE.Vector3();
+          j.prevRestWQ = new THREE.Quaternion();
+        }
+        j.prevBoneWPos.copy(_hsBoneWPos);
+        j.prevRestWQ.copy(_hsRestWQ);
+
         const stiffness = j.stiffness * hairFlowStrength;
         const dragForce = THREE.MathUtils.clamp(j.drag, 0, 1);
 
@@ -11574,7 +11649,7 @@
         _hsNextTail.sub(_hsBoneWPos);
         const len = _hsNextTail.length() || 1e-6;
         _hsNextTail.multiplyScalar(j.boneLength / len).add(_hsBoneWPos);
-        clampTailToCone(j, _hsRestWQ, _hsBoneWPos);
+        const hitCone = clampTailToCone(j, _hsRestWQ, _hsBoneWPos);
 
         if (j.collides && skirtColliders.length) {
           collideSkirtPoint(_hsNextTail);
@@ -11583,7 +11658,8 @@
           _hsNextTail.multiplyScalar(j.boneLength / l2).add(_hsBoneWPos);
         }
 
-        j.prevTail.copy(j.currentTail);
+        if (hitCone) j.prevTail.copy(_hsNextTail);
+        else j.prevTail.copy(j.currentTail);
         j.currentTail.copy(_hsNextTail);
 
         _hsToDir.subVectors(_hsNextTail, _hsBoneWPos);
@@ -11622,10 +11698,11 @@
         acc[j.family] = (acc[j.family] || 0) + 1;
         return acc;
       }, {}),
-      sample: hairSpringJoints.slice(0, 12).map((j) => ({
+      sample: hairSpringJoints.slice(0, 16).map((j) => ({
         name: j.bone.name,
         kind: j.kind,
         tier: j.tier,
+        inf: j.influence != null ? +j.influence.toFixed(2) : null,
         maxDeg: Number.isFinite(j.maxAngle) ? Math.round(THREE.MathUtils.radToDeg(j.maxAngle)) : null,
       })),
     });
@@ -13382,7 +13459,7 @@
 
     // -- Character preview textures (body / head / overlays / eyes) --
     // Bump when publishing so GitHub Pages / browser caches cannot keep an old GLB or PNG.
-    const ASSET_REV = '20260817m';
+    const ASSET_REV = '20260817x';
     const textureLoader = new THREE.TextureLoader();
     const TEX_URL = (file) => {
       const enc = String(file || '').split('/').map(encodeURIComponent).join('/');
