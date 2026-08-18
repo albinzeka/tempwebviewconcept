@@ -982,7 +982,7 @@
       chestWidth: 0,
       chestThickness: 0,
       waistWidth: 0,
-      waistThickness: 0,
+      bellySize: 0,
       hipWidth: 0,
       hipThickness: 0,
       upperTorsoWidth: 0,
@@ -1015,28 +1015,31 @@
         label: 'Chest thickness',
         range: 'custom',
         minMul: 0.9,
-        maxMul: 1.3,
-        targets: [{ bone: 'CTRL-tweak_spine.003', axes: 'z' }],
+        maxMul: 1.2,
+        targets: [
+          { bone: 'CTRL-tweak_spine.003', axes: 'z' },
+          { bone: 'CTRL-tweak_spine.002', axes: 'z' },
+        ],
       },
       waistWidth: {
         id: 'waistWidth',
         label: 'Waist width',
         range: 'custom',
         minMul: 0.9,
-        maxMul: 1.3,
+        maxMul: 1.6,
         targets: [{ bone: 'CTRL-tweak_spine.002', axes: 'x' }],
       },
-      waistThickness: {
-        id: 'waistThickness',
-        label: 'Waist thickness',
+      bellySize: {
+        id: 'bellySize',
+        label: 'Belly size',
         range: 'custom',
-        minMul: 0.9,
-        maxMul: 1.3,
-        targets: [{ bone: 'CTRL-tweak_spine.002', axes: 'z' }],
+        minMul: 0.6,
+        maxMul: 1.6,
+        targets: [{ bone: 'CTRL-DEF-spine.007', axes: 'xyz' }],
       },
       hipWidth: {
         id: 'hipWidth',
-        label: 'Hip width',
+        label: 'Hip bones width',
         range: 'custom',
         amp: 0.3, // x0.7...1.3
         targets: [{ bone: 'CTRL-tweak_spine.001', axes: 'x' }],
@@ -1075,8 +1078,10 @@
       },
       hipBone: {
         id: 'hipBone',
-        label: 'Hip bone',
-        range: 'big', // x0.8...1.2
+        label: 'Hips width',
+        range: 'custom',
+        minMul: 0.9,
+        maxMul: 1.2,
         targets: [{ bone: 'CTRL-tweak_spine', axes: 'x' }],
       },
     };
@@ -1658,12 +1663,12 @@
           { type: 'bone', id: 'shoulderWidth', label: 'Shoulder width', range: 'S' },
           { type: 'bone', id: 'chestWidth', label: 'Chest width', range: 'B' },
           { type: 'bone', id: 'chestThickness', label: 'Chest thickness', range: 'B' },
-          { type: 'bone', id: 'upperTorsoWidth', label: 'Lats width', range: 'B' },
+          // Lats width (upperTorsoWidth / CTRL-DEF-spine.003) — disabled until later.
           { type: 'bone', id: 'waistWidth', label: 'Waist width', range: 'B' },
-          { type: 'bone', id: 'waistThickness', label: 'Waist thickness', range: 'B' },
-          { type: 'bone', id: 'hipWidth', label: 'Hip width', range: 'B' },
+          { type: 'bone', id: 'bellySize', label: 'Belly size', range: 'B' },
+          { type: 'bone', id: 'hipWidth', label: 'Hip bones width', range: 'B' },
           { type: 'bone', id: 'hipThickness', label: 'Hip thickness', range: 'B' },
-          { type: 'bone', id: 'hipBone', label: 'Hip bone size', range: 'B' },
+          { type: 'bone', id: 'hipBone', label: 'Hips width', range: 'B' },
           { type: 'bone', id: 'armSize', label: 'Arm size', range: 'B' },
           { type: 'bone', id: 'legsThickness', label: 'Leg thickness', range: 'S' },
           { type: 'bone', id: 'neckLength', label: 'Neck length', range: 'B' },
@@ -2078,15 +2083,15 @@
         maxDelta: 0.2,
       },
       torsoThickness: {
-        ids: ['chestThickness', 'waistThickness', 'hipThickness'],
+        ids: ['chestThickness', 'hipThickness'],
         maxDelta: 0.2,
       },
       bodyWidthExtra: {
-        ids: ['shoulderWidth', 'hipBone', 'upperTorsoWidth'],
+        ids: ['shoulderWidth', 'hipBone'],
         noise: 0.16,
       },
       bodyThicknessExtra: {
-        ids: ['legsThickness'],
+        ids: ['legsThickness', 'bellySize'],
         noise: 0.16,
       },
     };
@@ -2094,7 +2099,7 @@
     const MUSCLE_FAT_THRESHOLD = 0.4;
     const MUSCLE_BELLY_CAP = 0.05;
     const MUSCLE_THICKNESS_CAP = 0.2;
-    const MUSCLE_THICKNESS_IDS = ['chestThickness', 'waistThickness', 'hipThickness'];
+    const MUSCLE_THICKNESS_IDS = ['chestThickness', 'hipThickness'];
 
     /** Near-full gender expression on Randomizer → hard floors/ceilings after sampling. */
     const GENDER_GUARD_FEMALE = 0.15; // g <= this → female mins/maxes
@@ -2399,7 +2404,6 @@
         ensureControlAtLeast('shoulderWidth', 0.00);
         ensureControlAtLeast('chestWidth', 0.20);
         ensureControlAtLeast('chestThickness', 0.00);
-        ensureControlAtLeast('upperTorsoWidth', 0.00);
         ensureControlAtMost('hipBone', 0.20);
         ensureControlAtLeast('armSize', -0.30);
         ensureControlAtLeast('muscular_morph', -0.70);
@@ -13509,7 +13513,7 @@
 
     // -- Character preview textures (body / head / overlays / eyes) --
     // Bump when publishing so GitHub Pages / browser caches cannot keep an old GLB or PNG.
-    const ASSET_REV = '20260817z';
+    const ASSET_REV = '20260818c';
     const textureLoader = new THREE.TextureLoader();
     const TEX_URL = (file) => {
       const enc = String(file || '').split('/').map(encodeURIComponent).join('/');

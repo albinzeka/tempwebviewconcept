@@ -80,15 +80,15 @@ Head size (Bn): visual base `HEAD_BASE = 1.2` at slider 0; then ×`(1 + 0.2 · h
 |---------|-------|------|------|
 | Shoulder width | `CTRL-ORG-shoulder.L/R` | Y | small ×0.9…1.1 |
 | Chest width | `CTRL-tweak_spine.003` | X | ×0.9…1.3 |
-| Chest thickness | `CTRL-tweak_spine.003` | Z | ×0.9…1.3 |
-| Waist width | `CTRL-tweak_spine.002` | X | ×0.9…1.3 |
-| Waist thickness | `CTRL-tweak_spine.002` | Z | ×0.9…1.3 |
-| Hip width | `CTRL-tweak_spine.001` | X | amp 0.3 → ×0.7…1.3 |
+| Chest thickness | `CTRL-tweak_spine.003` + `CTRL-tweak_spine.002` | Z | ×0.9…1.2 |
+| Waist width | `CTRL-tweak_spine.002` | X | ×0.9…1.6 |
+| Belly size | `CTRL-DEF-spine.007` | xyz | ×0.6…1.6 |
+| Hip bones width | `CTRL-tweak_spine.001` | X | amp 0.3 → ×0.7…1.3 |
 | Hip thickness | `CTRL-tweak_spine.001` | Z | ×0.9…1.3 |
-| Lats width | `CTRL-DEF-spine.003` | X | big ×0.8…1.2 |
+| Lats width | `CTRL-DEF-spine.003` | X | big ×0.8…1.2 · **disabled (UI hidden)** |
 | Arm size | `CTRL-DEF-upper_arm.L/R` | XZ | big ×0.8…1.2 |
 | Leg thickness | `CTRL-DEF-thigh.L/R` | X | small ×0.9…1.1 |
-| Hip bone size | `CTRL-tweak_spine` | X | big ×0.8…1.2 |
+| Hips width | `CTRL-tweak_spine` | X | ×0.9…1.2 |
 
 ---
 
@@ -296,17 +296,17 @@ Category **Randomizer** shows one **Gender expression** slider (0 = feminine, 1 
 - Usually **0…0.10** (not mid 0.5)
 - ~8% of rolls can reach up to **0.70**
 
-**Correlated torso:** `chestWidth` / `waistWidth` / `hipWidth` share a base and stay within **±0.20** of it (same for chest/waist/hip **thickness**). Shoulders/lats/hipBone/legs use a looser ±0.16 group.
+**Correlated torso:** `chestWidth` / `waistWidth` / `hipWidth` share a base and stay within **±0.20** of it (same for chest/hip **thickness** — chest thickness also drives former waist Z). Shoulders/`hipBone`/legs/`bellySize` use a looser ±0.16 group. Lats width is hidden and not randomized.
 
-**Muscle vs fat:** if `muscular_morph` **> 0.40**, then `big_belly` ≤ **0.05** and chest/waist/hip thickness ≤ **+0.20**.
+**Muscle vs fat:** if `muscular_morph` **> 0.40**, then `big_belly` ≤ **0.05** and chest/hip thickness ≤ **+0.20**.
 
 **Gender expression floors** (after sampling; `g` = Gender expression 0 fem … 1 masc):
 
 | When | Floors / caps |
 |------|----------------|
 | Always | Glute size (Bn) ≥ **0.20** |
-| Near full female (`g` ≤ 0.15) | Hip bone ≥ **0.30**; Chest thickness ≤ **0.10**; Breast size ≥ **0.10**; Breast volume ≥ **0.50**; Butt roundness (Sk) ≥ **0.10** |
-| Near full male (`g` ≥ 0.85) | Head shape / Lower face length ≥ **−0.20**; Shoulder width ≥ **0**; Chest width ≥ **0.20**; Chest thickness ≥ **0**; Lats width ≥ **0**; Hip bone ≤ **0.20**; Arm size ≥ **−0.30**; Muscular morph ≥ **−0.70**; Breast roundness (Sk) = **0** |
+| Near full female (`g` ≤ 0.15) | Hips width ≥ **0.30**; Chest thickness ≤ **0.10**; Breast size ≥ **0.10**; Breast volume ≥ **0.50**; Butt roundness (Sk) ≥ **0.10** |
+| Near full male (`g` ≥ 0.85) | Head shape / Lower face length ≥ **−0.20**; Shoulder width ≥ **0**; Chest width ≥ **0.20**; Chest thickness ≥ **0**; Hips width ≤ **0.20**; Arm size ≥ **−0.30**; Muscular morph ≥ **−0.70**; Breast roundness (Sk) = **0** |
 
 **Head size:** ±0.12 only. Height stays fixed.
 

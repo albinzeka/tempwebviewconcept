@@ -6,8 +6,9 @@ Browser morph / proportion concept viewer (no Flutter required).
 
 **https://albinzeka.github.io/tempwebviewconcept/**
 
-Includes as of 2026-08-17:
+Includes as of 2026-08-18:
 
+- Updated body + bob GLBs (belly CTRL, torso recipes)
 - Bob hair, silhouette outline (`best` / `ssaa2`)
 - Manual texture load (session-only overlays)
 - Eye / hair color (preset + hue)
